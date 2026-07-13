@@ -4,6 +4,7 @@ import {
   beskrivVejr,
   hentModelVejr,
   hentNedboersSandsynlighed,
+  hentYrSandsynlighed,
   soegSted,
   type Model,
   type ModelVejr,
@@ -32,7 +33,12 @@ const TIMER_I_GRAF = 48
 interface Datasæt {
   dmi: ModelVejr | null
   yr: ModelVejr | null
-  sandsynlighed: { time: string[]; precipitation_probability: (number | null)[] } | null
+  sandsynlighed: {
+    time: string[]
+    precipitation_probability: (number | null)[]
+    utc_offset_seconds: number
+  } | null
+  yrSandsynlighed: Map<number, number> | null
 }
 
 function stedLabel(sted: Sted): string {
@@ -74,12 +80,14 @@ export default function App() {
       hentModelVejr(sted.latitude, sted.longitude, 'dmi_seamless'),
       hentModelVejr(sted.latitude, sted.longitude, 'metno_seamless'),
       hentNedboersSandsynlighed(sted.latitude, sted.longitude),
-    ]).then(([dmi, yr, ps]) => {
+      hentYrSandsynlighed(sted.latitude, sted.longitude),
+    ]).then(([dmi, yr, ps, yrPs]) => {
       if (annulleret) return
       const næste: Datasæt = {
         dmi: dmi.status === 'fulfilled' ? dmi.value : null,
         yr: yr.status === 'fulfilled' ? yr.value : null,
         sandsynlighed: ps.status === 'fulfilled' ? ps.value : null,
+        yrSandsynlighed: yrPs.status === 'fulfilled' ? yrPs.value : null,
       }
       if (!næste.dmi && !næste.yr) {
         setFejl('Kunne ikke hente vejrdata. Tjek din internetforbindelse og prøv igen.')
@@ -138,15 +146,23 @@ export default function App() {
 
   const psFra = data?.sandsynlighed ? nuIndex(data.sandsynlighed) : 0
   const psTider = data?.sandsynlighed ? udsnit(data.sandsynlighed.time, psFra, TIMER_I_GRAF) : []
-  const psSerie: Serie[] = data?.sandsynlighed
-    ? [
-        {
-          navn: 'Sandsynlighed',
-          farve: FARVE_SANDSYNLIGHED,
-          vaerdier: udsnit(data.sandsynlighed.precipitation_probability, psFra, TIMER_I_GRAF),
-        },
-      ]
-    : []
+  const psSerie: Serie[] = []
+  if (data?.yrSandsynlighed && data.sandsynlighed) {
+    // Open-Meteos tider er lokale for stedet; MET Norges er UTC. Match via epoch.
+    const offset = data.sandsynlighed.utc_offset_seconds * 1000
+    psSerie.push({
+      navn: 'YR',
+      farve: FARVER.metno_seamless,
+      vaerdier: psTider.map((t) => data.yrSandsynlighed!.get(Date.parse(t + 'Z') - offset) ?? null),
+    })
+  }
+  if (data?.sandsynlighed) {
+    psSerie.push({
+      navn: 'Ensemble',
+      farve: FARVE_SANDSYNLIGHED,
+      vaerdier: udsnit(data.sandsynlighed.precipitation_probability, psFra, TIMER_I_GRAF),
+    })
+  }
 
   return (
     <div className="app">
@@ -227,6 +243,10 @@ export default function App() {
             <section className="kort">
               <h2>Sandsynlighed for nedbør · næste 48 timer · %</h2>
               <SoejleGraf serier={psSerie} tider={psTider} enhed="%" maxY={100} decimaler={0} />
+              <p className="fodnote">
+                YR = MET Norges officielle sandsynlighed. Ensemble = samlet international
+                prognose. DMI udgiver ikke sandsynligheder uden API-nøgle.
+              </p>
             </section>
           )}
 

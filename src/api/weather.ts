@@ -74,12 +74,17 @@ export async function hentModelVejr(
   return res.json()
 }
 
-// Sandsynlighed for nedbør findes kun i den samlede prognose (best_match),
-// ikke i de enkelte nationale modeller.
+// Ensemble-sandsynlighed for nedbør fra den samlede prognose (best_match).
+// De nationale modeller hos Open-Meteo har ikke egne sandsynligheder — de
+// falder alle tilbage til denne fælles beregning.
 export async function hentNedboersSandsynlighed(
   latitude: number,
   longitude: number,
-): Promise<{ time: string[]; precipitation_probability: (number | null)[] }> {
+): Promise<{
+  time: string[]
+  precipitation_probability: (number | null)[]
+  utc_offset_seconds: number
+}> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(latitude))
   url.searchParams.set('longitude', String(longitude))
@@ -89,7 +94,30 @@ export async function hentNedboersSandsynlighed(
   const res = await fetch(url)
   if (!res.ok) throw new Error('Kunne ikke hente nedbørssandsynlighed')
   const data = await res.json()
-  return data.hourly
+  return { ...data.hourly, utc_offset_seconds: data.utc_offset_seconds }
+}
+
+// Ægte YR-sandsynlighed for nedbør fra MET Norges officielle API.
+// (DMI udgiver ikke sandsynligheder uden registrering og API-nøgle.)
+// Returnerer et opslag fra epoch-millisekunder til procent.
+export async function hentYrSandsynlighed(
+  latitude: number,
+  longitude: number,
+): Promise<Map<number, number>> {
+  const url = new URL('https://api.met.no/weatherapi/locationforecast/2.0/complete')
+  url.searchParams.set('lat', latitude.toFixed(4))
+  url.searchParams.set('lon', longitude.toFixed(4))
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Kunne ikke hente data fra MET Norge')
+  const data = await res.json()
+  const kort = new Map<number, number>()
+  for (const punkt of data.properties?.timeseries ?? []) {
+    const detaljer =
+      punkt.data?.next_1_hours?.details ?? punkt.data?.next_6_hours?.details ?? null
+    const p = detaljer?.probability_of_precipitation
+    if (typeof p === 'number') kort.set(Date.parse(punkt.time), p)
+  }
+  return kort
 }
 
 // WMO-vejrkoder oversat til dansk.

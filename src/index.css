@@ -316,6 +316,12 @@ main.daempet {
   color: var(--tekst-2);
 }
 
+.fodnote {
+  font-size: 0.7rem;
+  color: var(--daempet);
+  margin: 0.25rem 0 0.35rem;
+}
+
 /* ---- Tabeller ---- */
 .uge {
   width: 100%;
