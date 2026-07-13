@@ -202,7 +202,7 @@ export default function App() {
                 <article className="nu-kort" key={m.id}>
                   <div className="kilde">
                     <span className="kilde-noegle" style={{ background: m.farve }} />
-                    {m.navn}
+                    {m.kort}
                   </div>
                   <div className="nu-temp">{fmt(h.temperature_2m[fra])}°</div>
                   <div className="nu-tekst">{beskrivVejr(h.weather_code[fra])}</div>
