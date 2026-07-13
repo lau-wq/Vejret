@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { beskrivVejr, hentVejr, soegSted, type Sted, type Vejrdata } from './api/weather.ts'
+import {
+  MODELLER,
+  beskrivVejr,
+  hentModelVejr,
+  hentNedboersSandsynlighed,
+  soegSted,
+  type Model,
+  type ModelVejr,
+  type Sted,
+} from './api/weather.ts'
+import { LinjeGraf, SoejleGraf, type Serie } from './components/grafer.tsx'
 
 const STANDARD_STED: Sted = {
   id: 2618425,
@@ -9,13 +19,20 @@ const STANDARD_STED: Sted = {
   country: 'Danmark',
 }
 
-const UGEDAGE = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag']
+// Seriefarver (validerede mod den mørke flade): DMI = blå, YR = grøn.
+const FARVER: Record<Model, string> = {
+  dmi_seamless: '#3987e5',
+  metno_seamless: '#199e70',
+}
+const FARVE_SANDSYNLIGHED = '#9085e9'
 
-function formatDag(isoDato: string, index: number): string {
-  if (index === 0) return 'I dag'
-  if (index === 1) return 'I morgen'
-  const d = new Date(isoDato + 'T00:00:00')
-  return UGEDAGE[d.getDay()].charAt(0).toUpperCase() + UGEDAGE[d.getDay()].slice(1)
+const UGEDAGE = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag']
+const TIMER_I_GRAF = 48
+
+interface Datasæt {
+  dmi: ModelVejr | null
+  yr: ModelVejr | null
+  sandsynlighed: { time: string[]; precipitation_probability: (number | null)[] } | null
 }
 
 function stedLabel(sted: Sted): string {
@@ -25,9 +42,23 @@ function stedLabel(sted: Sted): string {
   return dele.join(', ')
 }
 
+function nuIndex(hourly: { time: string[] }): number {
+  const nu = new Date()
+  const i = hourly.time.findIndex((t) => new Date(t) > nu)
+  return Math.max(0, i === -1 ? hourly.time.length - 1 : i - 1)
+}
+
+function udsnit<T>(arr: T[] | undefined, fra: number, antal: number): T[] {
+  return (arr ?? []).slice(fra, fra + antal)
+}
+
+function fmt(v: number | null | undefined, decimaler = 0): string {
+  return v == null ? '–' : v.toFixed(decimaler).replace('.', ',')
+}
+
 export default function App() {
   const [sted, setSted] = useState<Sted>(STANDARD_STED)
-  const [vejr, setVejr] = useState<Vejrdata | null>(null)
+  const [data, setData] = useState<Datasæt | null>(null)
   const [fejl, setFejl] = useState<string | null>(null)
   const [henter, setHenter] = useState(true)
 
@@ -39,16 +70,24 @@ export default function App() {
     let annulleret = false
     setHenter(true)
     setFejl(null)
-    hentVejr(sted.latitude, sted.longitude)
-      .then((data) => {
-        if (!annulleret) setVejr(data)
-      })
-      .catch(() => {
-        if (!annulleret) setFejl('Kunne ikke hente vejrdata. Tjek din internetforbindelse og prøv igen.')
-      })
-      .finally(() => {
-        if (!annulleret) setHenter(false)
-      })
+    Promise.allSettled([
+      hentModelVejr(sted.latitude, sted.longitude, 'dmi_seamless'),
+      hentModelVejr(sted.latitude, sted.longitude, 'metno_seamless'),
+      hentNedboersSandsynlighed(sted.latitude, sted.longitude),
+    ]).then(([dmi, yr, ps]) => {
+      if (annulleret) return
+      const næste: Datasæt = {
+        dmi: dmi.status === 'fulfilled' ? dmi.value : null,
+        yr: yr.status === 'fulfilled' ? yr.value : null,
+        sandsynlighed: ps.status === 'fulfilled' ? ps.value : null,
+      }
+      if (!næste.dmi && !næste.yr) {
+        setFejl('Kunne ikke hente vejrdata. Tjek din internetforbindelse og prøv igen.')
+      } else {
+        setData(næste)
+      }
+      setHenter(false)
+    })
     return () => {
       annulleret = true
     }
@@ -74,29 +113,49 @@ export default function App() {
     setForslag([])
   }
 
-  const nu = vejr ? beskrivVejr(vejr.current.weather_code) : null
+  const modeller = data
+    ? MODELLER.map((m) => ({
+        ...m,
+        vejr: m.id === 'dmi_seamless' ? data.dmi : data.yr,
+        farve: FARVER[m.id],
+      })).filter((m) => m.vejr)
+    : []
 
-  // De næste 12 timer fra nuværende tidspunkt.
-  const timer = (() => {
-    if (!vejr) return []
-    const start = vejr.hourly.time.findIndex((t) => t >= vejr.current.time)
-    const fra = start === -1 ? 0 : start
-    return vejr.hourly.time.slice(fra, fra + 12).map((t, i) => ({
-      tid: t.slice(11, 16),
-      temp: Math.round(vejr.hourly.temperature_2m[fra + i]),
-      ikon: beskrivVejr(vejr.hourly.weather_code[fra + i]).ikon,
-      regn: vejr.hourly.precipitation_probability[fra + i],
-    }))
-  })()
+  const reference = modeller[0]?.vejr ?? null
+  const fra = reference ? nuIndex(reference.hourly) : 0
+  const tider = reference ? udsnit(reference.hourly.time, fra, TIMER_I_GRAF) : []
+
+  const tempSerier: Serie[] = modeller.map((m) => ({
+    navn: m.kort,
+    farve: m.farve,
+    vaerdier: udsnit(m.vejr!.hourly.temperature_2m, fra, TIMER_I_GRAF),
+  }))
+  const nedboerSerier: Serie[] = modeller.map((m) => ({
+    navn: m.kort,
+    farve: m.farve,
+    vaerdier: udsnit(m.vejr!.hourly.precipitation, fra, TIMER_I_GRAF),
+  }))
+
+  const psFra = data?.sandsynlighed ? nuIndex(data.sandsynlighed) : 0
+  const psTider = data?.sandsynlighed ? udsnit(data.sandsynlighed.time, psFra, TIMER_I_GRAF) : []
+  const psSerie: Serie[] = data?.sandsynlighed
+    ? [
+        {
+          navn: 'Sandsynlighed',
+          farve: FARVE_SANDSYNLIGHED,
+          vaerdier: udsnit(data.sandsynlighed.precipitation_probability, psFra, TIMER_I_GRAF),
+        },
+      ]
+    : []
 
   return (
     <div className="app">
       <header>
-        <h1>Vejret</h1>
+        <span className="logo">VEJRET</span>
         <div className="soeg">
           <input
             type="search"
-            placeholder="Søg efter en by …"
+            placeholder="Søg by"
             value={soegetekst}
             onChange={(e) => onSoeg(e.target.value)}
             aria-label="Søg efter en by"
@@ -114,78 +173,137 @@ export default function App() {
       </header>
 
       {fejl && <p className="fejl">{fejl}</p>}
-      {henter && !vejr && <p className="status">Henter vejret …</p>}
+      {henter && !data && <p className="status">Henter vejrdata …</p>}
 
-      {vejr && nu && (
-        <main className={henter ? 'dæmpet' : ''}>
-          <section className="nu-kort">
-            <h2>{stedLabel(sted)}</h2>
-            <div className="nu-hoved">
-              <span className="nu-ikon" role="img" aria-label={nu.tekst}>
-                {nu.ikon}
-              </span>
-              <span className="nu-temp">{Math.round(vejr.current.temperature_2m)}°</span>
-            </div>
-            <p className="nu-tekst">{nu.tekst}</p>
-            <dl className="nu-detaljer">
-              <div>
-                <dt>Føles som</dt>
-                <dd>{Math.round(vejr.current.apparent_temperature)}°</dd>
-              </div>
-              <div>
-                <dt>Vind</dt>
-                <dd>{Math.round(vejr.current.wind_speed_10m)} m/s</dd>
-              </div>
-              <div>
-                <dt>Luftfugtighed</dt>
-                <dd>{vejr.current.relative_humidity_2m} %</dd>
-              </div>
-            </dl>
+      {reference && (
+        <main className={henter ? 'daempet' : ''}>
+          <h1>{stedLabel(sted)}</h1>
+
+          <section className="nu">
+            {modeller.map((m) => {
+              const h = m.vejr!.hourly
+              return (
+                <article className="nu-kort" key={m.id}>
+                  <div className="kilde">
+                    <span className="kilde-noegle" style={{ background: m.farve }} />
+                    {m.navn}
+                  </div>
+                  <div className="nu-temp">{fmt(h.temperature_2m[fra])}°</div>
+                  <div className="nu-tekst">{beskrivVejr(h.weather_code[fra])}</div>
+                  <dl className="nu-detaljer">
+                    <div>
+                      <dt>Vind</dt>
+                      <dd>{fmt(h.wind_speed_10m[fra])} m/s</dd>
+                    </div>
+                    <div>
+                      <dt>Fugtighed</dt>
+                      <dd>{fmt(h.relative_humidity_2m[fra])} %</dd>
+                    </div>
+                  </dl>
+                </article>
+              )
+            })}
           </section>
 
-          <section>
-            <h3>De næste timer</h3>
-            <div className="timer">
-              {timer.map((t) => (
-                <div className="time" key={t.tid}>
-                  <span className="time-tid">{t.tid}</span>
-                  <span className="time-ikon">{t.ikon}</span>
-                  <span className="time-temp">{t.temp}°</span>
-                  <span className="time-regn">💧 {t.regn}%</span>
-                </div>
-              ))}
-            </div>
+          {modeller.length === 1 && (
+            <p className="note">
+              {modeller[0].id === 'dmi_seamless'
+                ? 'YR/MET Norges model dækker kun Norden — kun DMI vises for dette sted.'
+                : 'DMI’s model dækker ikke dette sted — kun YR vises.'}
+            </p>
+          )}
+
+          <section className="kort">
+            <h2>Temperatur · næste 48 timer · °C</h2>
+            <LinjeGraf serier={tempSerier} tider={tider} enhed="°C" />
           </section>
 
-          <section>
-            <h3>7-dages prognose</h3>
-            <ul className="dage">
-              {vejr.daily.time.map((dato, i) => {
-                const v = beskrivVejr(vejr.daily.weather_code[i])
-                return (
-                  <li className="dag" key={dato}>
-                    <span className="dag-navn">{formatDag(dato, i)}</span>
-                    <span className="dag-ikon" title={v.tekst}>
-                      {v.ikon}
-                    </span>
-                    <span className="dag-regn">
-                      {vejr.daily.precipitation_sum[i] > 0
-                        ? `${vejr.daily.precipitation_sum[i].toFixed(1)} mm`
-                        : ''}
-                    </span>
-                    <span className="dag-temp">
-                      <strong>{Math.round(vejr.daily.temperature_2m_max[i])}°</strong> /{' '}
-                      {Math.round(vejr.daily.temperature_2m_min[i])}°
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
+          <section className="kort">
+            <h2>Nedbør · næste 48 timer · mm</h2>
+            <SoejleGraf serier={nedboerSerier} tider={tider} enhed="mm" />
           </section>
+
+          {psSerie.length > 0 && (
+            <section className="kort">
+              <h2>Sandsynlighed for nedbør · næste 48 timer · %</h2>
+              <SoejleGraf serier={psSerie} tider={psTider} enhed="%" maxY={100} decimaler={0} />
+            </section>
+          )}
+
+          <section className="kort">
+            <h2>7 døgn · maks / min °C · nedbør mm</h2>
+            <table className="uge">
+              <thead>
+                <tr>
+                  <th>Dag</th>
+                  {modeller.map((m) => (
+                    <th key={m.id}>
+                      <span className="kilde-noegle" style={{ background: m.farve }} />
+                      {m.kort} °C
+                    </th>
+                  ))}
+                  {modeller.map((m) => (
+                    <th key={m.id + '-mm'}>{m.kort} mm</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {reference.daily.time.map((dato, i) => (
+                  <tr key={dato}>
+                    <td>
+                      {i === 0 ? 'I dag' : UGEDAGE[new Date(dato + 'T00:00:00').getDay()]}
+                    </td>
+                    {modeller.map((m) => (
+                      <td key={m.id}>
+                        <strong>{fmt(m.vejr!.daily.temperature_2m_max[i])}</strong>
+                        {' / '}
+                        {fmt(m.vejr!.daily.temperature_2m_min[i])}
+                      </td>
+                    ))}
+                    {modeller.map((m) => (
+                      <td key={m.id + '-mm'}>{fmt(m.vejr!.daily.precipitation_sum[i], 1)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <details className="tabelvisning">
+            <summary>Vis timedata som tabel</summary>
+            <table className="uge">
+              <thead>
+                <tr>
+                  <th>Tid</th>
+                  {modeller.map((m) => (
+                    <th key={m.id}>{m.kort} °C</th>
+                  ))}
+                  {modeller.map((m) => (
+                    <th key={m.id + '-mm'}>{m.kort} mm</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tider.map((iso, i) => (
+                  <tr key={iso}>
+                    <td>{iso.slice(5, 10)} {iso.slice(11, 16)}</td>
+                    {tempSerier.map((s) => (
+                      <td key={s.navn}>{fmt(s.vaerdier[i], 1)}</td>
+                    ))}
+                    {nedboerSerier.map((s) => (
+                      <td key={s.navn + '-mm'}>{fmt(s.vaerdier[i], 1)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
         </main>
       )}
 
-      <footer>Vejrdata fra Open-Meteo.com</footer>
+      <footer>
+        Prognoser: DMI Harmonie og MET Norge (YR) via Open-Meteo.com
+      </footer>
     </div>
   )
 }

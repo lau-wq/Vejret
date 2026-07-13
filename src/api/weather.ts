@@ -1,4 +1,14 @@
-// Klient til Open-Meteo's gratis vejr- og geokodnings-API (kræver ingen API-nøgle).
+// Klient til Open-Meteo's gratis API (ingen API-nøgle). Vejrdata hentes fra to
+// nationale vejrmodeller, så de kan sammenlignes:
+//   - dmi_seamless:   DMI's Harmonie-model (Danmark)
+//   - metno_seamless: MET Norges model, som driver YR (Norge/Norden)
+
+export type Model = 'dmi_seamless' | 'metno_seamless'
+
+export const MODELLER: { id: Model; navn: string; kort: string }[] = [
+  { id: 'dmi_seamless', navn: 'DMI · Harmonie', kort: 'DMI' },
+  { id: 'metno_seamless', navn: 'YR · MET Norge', kort: 'YR' },
+]
 
 export interface Sted {
   id: number
@@ -9,28 +19,21 @@ export interface Sted {
   country?: string
 }
 
-export interface Vejrdata {
-  current: {
-    time: string
-    temperature_2m: number
-    apparent_temperature: number
-    relative_humidity_2m: number
-    wind_speed_10m: number
-    weather_code: number
-  }
+export interface ModelVejr {
   hourly: {
     time: string[]
-    temperature_2m: number[]
-    weather_code: number[]
-    precipitation_probability: number[]
+    temperature_2m: (number | null)[]
+    precipitation: (number | null)[]
+    weather_code: (number | null)[]
+    wind_speed_10m: (number | null)[]
+    relative_humidity_2m: (number | null)[]
   }
   daily: {
     time: string[]
-    weather_code: number[]
-    temperature_2m_max: number[]
-    temperature_2m_min: number[]
-    precipitation_sum: number[]
-    wind_speed_10m_max: number[]
+    weather_code: (number | null)[]
+    temperature_2m_max: (number | null)[]
+    temperature_2m_min: (number | null)[]
+    precipitation_sum: (number | null)[]
   }
 }
 
@@ -46,59 +49,81 @@ export async function soegSted(navn: string): Promise<Sted[]> {
   return data.results ?? []
 }
 
-export async function hentVejr(latitude: number, longitude: number): Promise<Vejrdata> {
+export async function hentModelVejr(
+  latitude: number,
+  longitude: number,
+  model: Model,
+): Promise<ModelVejr> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(latitude))
   url.searchParams.set('longitude', String(longitude))
+  url.searchParams.set('models', model)
   url.searchParams.set(
-    'current',
-    'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code',
+    'hourly',
+    'temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m',
   )
-  url.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation_probability')
   url.searchParams.set(
     'daily',
-    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max',
+    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum',
   )
   url.searchParams.set('wind_speed_unit', 'ms')
   url.searchParams.set('timezone', 'auto')
   url.searchParams.set('forecast_days', '7')
   const res = await fetch(url)
-  if (!res.ok) throw new Error('Kunne ikke hente vejrdata')
+  if (!res.ok) throw new Error(`Kunne ikke hente data for ${model}`)
   return res.json()
 }
 
-// WMO-vejrkoder oversat til dansk beskrivelse og ikon.
-const VEJRKODER: Record<number, { tekst: string; ikon: string }> = {
-  0: { tekst: 'Klar himmel', ikon: '☀️' },
-  1: { tekst: 'Overvejende klart', ikon: '🌤️' },
-  2: { tekst: 'Delvist skyet', ikon: '⛅' },
-  3: { tekst: 'Overskyet', ikon: '☁️' },
-  45: { tekst: 'Tåge', ikon: '🌫️' },
-  48: { tekst: 'Rimtåge', ikon: '🌫️' },
-  51: { tekst: 'Let støvregn', ikon: '🌦️' },
-  53: { tekst: 'Støvregn', ikon: '🌦️' },
-  55: { tekst: 'Kraftig støvregn', ikon: '🌧️' },
-  56: { tekst: 'Let isslag', ikon: '🌧️' },
-  57: { tekst: 'Isslag', ikon: '🌧️' },
-  61: { tekst: 'Let regn', ikon: '🌦️' },
-  63: { tekst: 'Regn', ikon: '🌧️' },
-  65: { tekst: 'Kraftig regn', ikon: '🌧️' },
-  66: { tekst: 'Let isregn', ikon: '🌧️' },
-  67: { tekst: 'Isregn', ikon: '🌧️' },
-  71: { tekst: 'Let sne', ikon: '🌨️' },
-  73: { tekst: 'Sne', ikon: '🌨️' },
-  75: { tekst: 'Kraftig sne', ikon: '❄️' },
-  77: { tekst: 'Snekorn', ikon: '❄️' },
-  80: { tekst: 'Lette byger', ikon: '🌦️' },
-  81: { tekst: 'Byger', ikon: '🌧️' },
-  82: { tekst: 'Kraftige byger', ikon: '⛈️' },
-  85: { tekst: 'Snebyger', ikon: '🌨️' },
-  86: { tekst: 'Kraftige snebyger', ikon: '❄️' },
-  95: { tekst: 'Tordenvejr', ikon: '⛈️' },
-  96: { tekst: 'Torden med hagl', ikon: '⛈️' },
-  99: { tekst: 'Kraftig torden med hagl', ikon: '⛈️' },
+// Sandsynlighed for nedbør findes kun i den samlede prognose (best_match),
+// ikke i de enkelte nationale modeller.
+export async function hentNedboersSandsynlighed(
+  latitude: number,
+  longitude: number,
+): Promise<{ time: string[]; precipitation_probability: (number | null)[] }> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(latitude))
+  url.searchParams.set('longitude', String(longitude))
+  url.searchParams.set('hourly', 'precipitation_probability')
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('forecast_days', '3')
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Kunne ikke hente nedbørssandsynlighed')
+  const data = await res.json()
+  return data.hourly
 }
 
-export function beskrivVejr(code: number): { tekst: string; ikon: string } {
-  return VEJRKODER[code] ?? { tekst: 'Ukendt', ikon: '❓' }
+// WMO-vejrkoder oversat til dansk.
+const VEJRKODER: Record<number, string> = {
+  0: 'Klart',
+  1: 'Mest klart',
+  2: 'Delvist skyet',
+  3: 'Overskyet',
+  45: 'Tåge',
+  48: 'Rimtåge',
+  51: 'Let støvregn',
+  53: 'Støvregn',
+  55: 'Kraftig støvregn',
+  56: 'Let isslag',
+  57: 'Isslag',
+  61: 'Let regn',
+  63: 'Regn',
+  65: 'Kraftig regn',
+  66: 'Let isregn',
+  67: 'Isregn',
+  71: 'Let sne',
+  73: 'Sne',
+  75: 'Kraftig sne',
+  77: 'Snekorn',
+  80: 'Lette byger',
+  81: 'Byger',
+  82: 'Kraftige byger',
+  85: 'Snebyger',
+  86: 'Kraftige snebyger',
+  95: 'Torden',
+  96: 'Torden, hagl',
+  99: 'Kraftig torden, hagl',
+}
+
+export function beskrivVejr(code: number | null | undefined): string {
+  return code == null ? '–' : (VEJRKODER[code] ?? 'Ukendt')
 }

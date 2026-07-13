@@ -1,3 +1,15 @@
+/* Stramt, mørkt design. Farveroller er samlet her, resten refererer til dem. */
+:root {
+  --side: #0d0d0d;
+  --flade: #1a1a19;
+  --tekst: #ffffff;
+  --tekst-2: #c3c2b7;
+  --daempet: #898781;
+  --grid: #2c2c2a;
+  --akse: #383835;
+  --kant: rgba(255, 255, 255, 0.1);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -6,59 +18,64 @@
 
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(165deg, #1e3a8a 0%, #3b82f6 55%, #7dd3fc 100%);
+  background: var(--side);
+  color: var(--tekst);
   min-height: 100vh;
-  color: #0f172a;
 }
 
 .app {
-  max-width: 640px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 2rem;
+  padding: 1.25rem 1rem 2rem;
 }
 
 header {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.75rem;
 }
 
-header h1 {
-  color: #fff;
-  font-size: 1.75rem;
-  letter-spacing: 0.02em;
+.logo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: var(--tekst);
 }
 
 .soeg {
   position: relative;
-  flex: 1;
-  min-width: 220px;
+  width: min(280px, 60vw);
 }
 
 .soeg input {
   width: 100%;
-  padding: 0.65rem 1rem;
-  border: none;
-  border-radius: 999px;
-  font-size: 1rem;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--tekst);
+  background: var(--flade);
+  border: 1px solid var(--kant);
+  border-radius: 6px;
+  outline: none;
 }
 
 .soeg input:focus {
-  outline: 3px solid rgba(255, 255, 255, 0.6);
+  border-color: var(--daempet);
+}
+
+.soeg input::placeholder {
+  color: var(--daempet);
 }
 
 .forslag {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  background: var(--flade);
+  border: 1px solid var(--kant);
+  border-radius: 6px;
   list-style: none;
   overflow: hidden;
   z-index: 10;
@@ -67,188 +84,296 @@ header h1 {
 .forslag button {
   display: block;
   width: 100%;
-  padding: 0.65rem 1rem;
+  padding: 0.55rem 0.85rem;
   border: none;
   background: none;
+  color: var(--tekst-2);
   text-align: left;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
 .forslag button:hover {
-  background: #eff6ff;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--tekst);
+}
+
+h1 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
 }
 
 .status,
 .fejl {
-  color: #fff;
-  text-align: center;
+  color: var(--tekst-2);
   padding: 2rem 0;
-  font-size: 1.1rem;
+  text-align: center;
 }
 
 .fejl {
-  background: rgba(153, 27, 27, 0.85);
-  border-radius: 12px;
-  padding: 1rem;
+  color: #e66767;
 }
 
-main.dæmpet {
-  opacity: 0.6;
+.note {
+  color: var(--daempet);
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
 }
 
-section {
-  margin-bottom: 1.5rem;
+main.daempet {
+  opacity: 0.55;
 }
 
-h3 {
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.9;
+/* ---- Nu-panelet ---- */
+.nu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .nu-kort {
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 20px;
-  padding: 1.5rem;
-  text-align: center;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  background: var(--flade);
+  border: 1px solid var(--kant);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
 }
 
-.nu-kort h2 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #334155;
-}
-
-.nu-hoved {
+.kilde {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin: 0.5rem 0;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--daempet);
+  margin-bottom: 0.6rem;
 }
 
-.nu-ikon {
-  font-size: 4rem;
-  line-height: 1;
+.kilde-noegle {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+}
+
+.kilde .kilde-noegle {
+  margin-right: 0;
 }
 
 .nu-temp {
-  font-size: 4.5rem;
-  font-weight: 700;
+  font-size: 2.6rem;
+  font-weight: 650;
+  line-height: 1.1;
 }
 
 .nu-tekst {
-  font-size: 1.2rem;
-  color: #475569;
-  margin-bottom: 1rem;
+  color: var(--tekst-2);
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
 }
 
 .nu-detaljer {
   display: flex;
-  justify-content: center;
-  gap: 2.5rem;
+  gap: 1.75rem;
 }
 
 .nu-detaljer dt {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--daempet);
 }
 
 .nu-detaljer dd {
-  font-size: 1.1rem;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Kort og grafer ---- */
+.kort {
+  background: var(--flade);
+  border: 1px solid var(--kant);
+  border-radius: 8px;
+  padding: 1rem 1.1rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.kort h2 {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--daempet);
+  margin-bottom: 0.75rem;
+}
+
+.graf-legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.graf-legend-punkt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--tekst-2);
+}
+
+.graf-legend-noegle {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.graf-flade {
+  position: relative;
+}
+
+.graf svg {
+  display: block;
+  width: 100%;
+  touch-action: none;
+}
+
+.graf-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.graf-akse {
+  fill: var(--daempet);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graf-akse-dag {
+  fill: var(--tekst-2);
   font-weight: 600;
 }
 
-.timer {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
+.graf-krydssigte {
+  stroke: var(--akse);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
-.time {
-  background: rgba(255, 255, 255, 0.88);
-  border-radius: 14px;
-  padding: 0.6rem 0.5rem;
-  min-width: 64px;
+.graf-punkt {
+  stroke: var(--flade);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.graf-tooltip {
+  position: absolute;
+  top: 8px;
+  background: var(--side);
+  border: 1px solid var(--kant);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.graf-tooltip-titel {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--daempet);
+  margin-bottom: 0.3rem;
+}
+
+.graf-tooltip-raekke {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-
-.time-tid {
+  gap: 0.5rem;
   font-size: 0.8rem;
-  color: #64748b;
+  line-height: 1.5;
 }
 
-.time-ikon {
-  font-size: 1.4rem;
+.graf-tooltip-noegle {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
 }
 
-.time-temp {
-  font-weight: 700;
+.graf-tooltip-vaerdi {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--tekst);
+  min-width: 4.2em;
 }
 
-.time-regn {
-  font-size: 0.72rem;
-  color: #2563eb;
+.graf-tooltip-navn {
+  color: var(--tekst-2);
 }
 
-.dage {
-  list-style: none;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+/* ---- Tabeller ---- */
+.uge {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.dag {
-  display: grid;
-  grid-template-columns: 1fr 2.2rem 1fr 5.2rem;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.1rem;
+.uge th {
+  text-align: right;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--daempet);
+  padding: 0.4rem 0.5rem;
+  white-space: nowrap;
 }
 
-.dag + .dag {
-  border-top: 1px solid #e2e8f0;
+.uge th:first-child,
+.uge td:first-child {
+  text-align: left;
+  padding-left: 0;
 }
 
-.dag-navn {
+.uge td {
+  text-align: right;
+  padding: 0.45rem 0.5rem;
+  border-top: 1px solid var(--grid);
+  color: var(--tekst-2);
+  white-space: nowrap;
+}
+
+.uge td strong {
+  color: var(--tekst);
   font-weight: 600;
 }
 
-.dag-ikon {
-  font-size: 1.3rem;
-  text-align: center;
+.tabelvisning {
+  margin-bottom: 0.75rem;
 }
 
-.dag-regn {
-  font-size: 0.82rem;
-  color: #2563eb;
-  text-align: right;
+.tabelvisning summary {
+  font-size: 0.78rem;
+  color: var(--daempet);
+  cursor: pointer;
+  padding: 0.25rem 0;
 }
 
-.dag-temp {
-  text-align: right;
-  color: #475569;
-}
-
-.dag-temp strong {
-  color: #0f172a;
+.tabelvisning[open] {
+  background: var(--flade);
+  border: 1px solid var(--kant);
+  border-radius: 8px;
+  padding: 0.75rem 1.1rem;
 }
 
 footer {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.8rem;
-  margin-top: 1rem;
+  color: var(--daempet);
+  font-size: 0.72rem;
+  margin-top: 1.5rem;
 }
