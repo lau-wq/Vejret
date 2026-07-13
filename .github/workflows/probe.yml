@@ -1,0 +1,19 @@
+name: API-test (midlertidig)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test precipitation_probability pr. model
+        run: |
+          for model in dmi_seamless metno_seamless; do
+            echo "=== $model ==="
+            curl -sS "https://api.open-meteo.com/v1/forecast?latitude=55.68&longitude=12.57&hourly=precipitation_probability&models=$model&forecast_days=1" | head -c 1200
+            echo
+          done
+          echo "=== best_match ==="
+          curl -sS "https://api.open-meteo.com/v1/forecast?latitude=55.68&longitude=12.57&hourly=precipitation_probability&forecast_days=1" | head -c 800
+          echo
