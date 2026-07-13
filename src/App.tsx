@@ -10,7 +10,7 @@ import {
   type ModelVejr,
   type Sted,
 } from './api/weather.ts'
-import { LinjeGraf, SoejleGraf, type Serie } from './components/grafer.tsx'
+import { KombiGraf, LinjeGraf, type Serie } from './components/grafer.tsx'
 
 const STANDARD_STED: Sted = {
   id: 2618425,
@@ -139,28 +139,43 @@ export default function App() {
     vaerdier: udsnit(m.vejr!.hourly.temperature_2m, fra, TIMER_I_GRAF),
   }))
   const nedboerSerier: Serie[] = modeller.map((m) => ({
-    navn: m.kort,
+    navn: `${m.kort} mm`,
     farve: m.farve,
+    enhed: 'mm',
+    decimaler: 1,
+    mark: 'soejle',
     vaerdier: udsnit(m.vejr!.hourly.precipitation, fra, TIMER_I_GRAF),
   }))
 
-  const psFra = data?.sandsynlighed ? nuIndex(data.sandsynlighed) : 0
-  const psTider = data?.sandsynlighed ? udsnit(data.sandsynlighed.time, psFra, TIMER_I_GRAF) : []
+  // Sandsynlighedslinjerne mappes til modellernes tidslinje via epoch:
+  // Open-Meteos tider er lokale for stedet, MET Norges er UTC.
   const psSerie: Serie[] = []
-  if (data?.yrSandsynlighed && data.sandsynlighed) {
-    // Open-Meteos tider er lokale for stedet; MET Norges er UTC. Match via epoch.
-    const offset = data.sandsynlighed.utc_offset_seconds * 1000
-    psSerie.push({
-      navn: 'YR',
-      farve: FARVER.metno_seamless,
-      vaerdier: psTider.map((t) => data.yrSandsynlighed!.get(Date.parse(t + 'Z') - offset) ?? null),
-    })
-  }
   if (data?.sandsynlighed) {
+    const offset = data.sandsynlighed.utc_offset_seconds * 1000
+    const epoch = (lokal: string) => Date.parse(lokal + 'Z') - offset
+    if (data.yrSandsynlighed) {
+      psSerie.push({
+        navn: 'YR %',
+        farve: FARVER.metno_seamless,
+        enhed: '%',
+        decimaler: 0,
+        mark: 'linje',
+        vaerdier: tider.map((t) => data.yrSandsynlighed!.get(epoch(t)) ?? null),
+      })
+    }
+    const ensembleKort = new Map(
+      data.sandsynlighed.time.map((t, i) => [
+        epoch(t),
+        data.sandsynlighed!.precipitation_probability[i],
+      ]),
+    )
     psSerie.push({
-      navn: 'Ensemble',
+      navn: 'Ensemble %',
       farve: FARVE_SANDSYNLIGHED,
-      vaerdier: udsnit(data.sandsynlighed.precipitation_probability, psFra, TIMER_I_GRAF),
+      enhed: '%',
+      decimaler: 0,
+      mark: 'linje',
+      vaerdier: tider.map((t) => ensembleKort.get(epoch(t)) ?? null),
     })
   }
 
@@ -235,20 +250,14 @@ export default function App() {
           </section>
 
           <section className="kort">
-            <h2>Nedbør · næste 48 timer · mm</h2>
-            <SoejleGraf serier={nedboerSerier} tider={tider} enhed="mm" />
+            <h2>Nedbør og sandsynlighed · næste 48 timer · mm / %</h2>
+            <KombiGraf soejler={nedboerSerier} linjer={psSerie} tider={tider} />
+            <p className="fodnote">
+              Søjler = nedbør i mm (venstre akse). Linjer = sandsynlighed i % (højre akse).
+              YR % = MET Norges officielle sandsynlighed; Ensemble % = samlet international
+              prognose. DMI udgiver ikke sandsynligheder uden API-nøgle.
+            </p>
           </section>
-
-          {psSerie.length > 0 && (
-            <section className="kort">
-              <h2>Sandsynlighed for nedbør · næste 48 timer · %</h2>
-              <SoejleGraf serier={psSerie} tider={psTider} enhed="%" maxY={100} decimaler={0} />
-              <p className="fodnote">
-                YR = MET Norges officielle sandsynlighed. Ensemble = samlet international
-                prognose. DMI udgiver ikke sandsynligheder uden API-nøgle.
-              </p>
-            </section>
-          )}
 
           <section className="kort">
             <h2>7 døgn · maks / min °C · nedbør mm</h2>
@@ -301,6 +310,9 @@ export default function App() {
                   {modeller.map((m) => (
                     <th key={m.id + '-mm'}>{m.kort} mm</th>
                   ))}
+                  {psSerie.map((s) => (
+                    <th key={s.navn}>{s.navn}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -312,6 +324,9 @@ export default function App() {
                     ))}
                     {nedboerSerier.map((s) => (
                       <td key={s.navn + '-mm'}>{fmt(s.vaerdier[i], 1)}</td>
+                    ))}
+                    {psSerie.map((s) => (
+                      <td key={s.navn}>{fmt(s.vaerdier[i])}</td>
                     ))}
                   </tr>
                 ))}

@@ -9,6 +9,9 @@ export interface Serie {
   navn: string
   farve: string
   vaerdier: (number | null)[]
+  enhed?: string // pr. serie (fx i KombiGraf); ellers bruges grafens enhed
+  decimaler?: number
+  mark?: 'linje' | 'soejle' // styrer legendens nøgleform
 }
 
 export interface GrafProps {
@@ -96,7 +99,7 @@ function Tooltip({
           <div className="graf-tooltip-raekke" key={s.navn}>
             <span className="graf-tooltip-noegle" style={{ background: s.farve }} />
             <span className="graf-tooltip-vaerdi">
-              {v == null ? '–' : `${v.toFixed(decimaler)} ${enhed}`}
+              {v == null ? '–' : `${v.toFixed(s.decimaler ?? decimaler)} ${s.enhed ?? enhed}`}
             </span>
             <span className="graf-tooltip-navn">{s.navn}</span>
           </div>
@@ -120,6 +123,7 @@ function GrafRamme({
   yTicks,
   yTilPx,
   visLegend,
+  margenHoejre = MARGEN.hoejre,
 }: {
   serier: Serie[]
   tider: string[]
@@ -134,15 +138,21 @@ function GrafRamme({
   yTicks: number[]
   yTilPx: (v: number) => number
   visLegend: boolean
+  margenHoejre?: number
 }) {
-  const plotBredde = bredde - MARGEN.venstre - MARGEN.hoejre
+  const plotBredde = bredde - MARGEN.venstre - margenHoejre
   return (
     <div className="graf" ref={ref}>
       {visLegend && (
         <div className="graf-legend">
           {serier.map((s) => (
             <span className="graf-legend-punkt" key={s.navn}>
-              <span className="graf-legend-noegle" style={{ background: s.farve }} />
+              <span
+                className={
+                  s.mark === 'soejle' ? 'graf-legend-noegle soejle' : 'graf-legend-noegle'
+                }
+                style={{ background: s.farve }}
+              />
               {s.navn}
             </span>
           ))}
@@ -211,9 +221,9 @@ function GrafRamme({
   )
 }
 
-function brugTooltip(tider: string[], bredde: number) {
+function brugTooltip(tider: string[], bredde: number, margenHoejre = MARGEN.hoejre) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
-  const plotBredde = bredde - MARGEN.venstre - MARGEN.hoejre
+  const plotBredde = bredde - MARGEN.venstre - margenHoejre
   function onPointerMove(e: ReactPointerEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = e.clientX - rect.left
@@ -256,23 +266,17 @@ export function LinjeGraf({ serier, tider, enhed, decimaler = 1 }: GrafProps) {
       yTilPx={yTilPx}
       visLegend={serier.length > 1}
     >
-      {serier.map((s) => {
-        const sti = s.vaerdier
-          .map((v, i) => (v == null ? null : `${i === 0 ? 'M' : 'L'}${xTilPx(i)},${yTilPx(v)}`))
-          .filter(Boolean)
-          .join(' ')
-        return (
-          <path
-            key={s.navn}
-            d={sti}
-            fill="none"
-            stroke={s.farve}
-            strokeWidth={2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        )
-      })}
+      {serier.map((s) => (
+        <path
+          key={s.navn}
+          d={linjeSti(s.vaerdier, xTilPx, yTilPx)}
+          fill="none"
+          stroke={s.farve}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
       {tooltip &&
         serier.map((s) => {
           const v = s.vaerdier[tooltip.index]
@@ -290,6 +294,25 @@ export function LinjeGraf({ serier, tider, enhed, decimaler = 1 }: GrafProps) {
         })}
     </GrafRamme>
   )
+}
+
+// Tegner en linje med "pen op" ved manglende værdier.
+function linjeSti(
+  vaerdier: (number | null)[],
+  xTilPx: (i: number) => number,
+  yTilPx: (v: number) => number,
+): string {
+  let sti = ''
+  let penNede = false
+  vaerdier.forEach((v, i) => {
+    if (v == null) {
+      penNede = false
+      return
+    }
+    sti += `${penNede ? 'L' : 'M'}${xTilPx(i)},${yTilPx(v)} `
+    penNede = true
+  })
+  return sti.trim()
 }
 
 // Søjle med 4px afrundet datatop og skarp bund.
@@ -348,6 +371,122 @@ export function SoejleGraf({ serier, tider, enhed, maxY, decimaler = 1 }: GrafPr
           )
         }),
       )}
+    </GrafRamme>
+  )
+}
+
+// Kombineret graf: søjler (fx nedbør i mm, venstre akse) og linjer
+// (fx sandsynlighed i %, fast 0–100 på højre akse) i samme plot.
+export function KombiGraf({
+  soejler,
+  linjer,
+  tider,
+}: {
+  soejler: Serie[]
+  linjer: Serie[]
+  tider: string[]
+}) {
+  const HOEJRE = 30
+  const TOP = 24 // ekstra luft til enheds-mærkaterne over akserne
+  const [ref, bredde] = useBredde()
+  const { tooltip, onPointerMove, onPointerLeave } = brugTooltip(tider, bredde, HOEJRE)
+
+  const alleMm = soejler.flatMap((s) => s.vaerdier).filter((v): v is number => v != null)
+  const maxMm = Math.max(1, Math.ceil(Math.max(...alleMm, 0) * 1.15))
+  const plotBredde = bredde - MARGEN.venstre - HOEJRE
+  const plotHoejde = HOEJDE - TOP - MARGEN.bund
+  const yMm = (v: number) => TOP + plotHoejde - (v / maxMm) * plotHoejde
+  const yPct = (v: number) => TOP + plotHoejde - (v / 100) * plotHoejde
+  const xTilPx = (i: number) => MARGEN.venstre + (plotBredde * (i + 0.5)) / tider.length
+  const yTicks = pæneTicks(0, maxMm)
+
+  const baandBredde = plotBredde / tider.length
+  const soejleBredde = Math.max(
+    1.5,
+    Math.min(24, (baandBredde - 3 - 2 * (soejler.length - 1)) / soejler.length),
+  )
+
+  return (
+    <GrafRamme
+      serier={[...soejler, ...linjer]}
+      tider={tider}
+      enhed=""
+      decimaler={1}
+      tooltip={tooltip}
+      bredde={bredde}
+      ref={ref}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      yTicks={yTicks}
+      yTilPx={yMm}
+      visLegend
+      margenHoejre={HOEJRE}
+    >
+      {/* Højre akse: fast procentskala */}
+      {[0, 50, 100].map((v) => (
+        <text
+          key={v}
+          x={MARGEN.venstre + plotBredde + 6}
+          y={yPct(v) + 3}
+          className="graf-akse"
+        >
+          {v}
+        </text>
+      ))}
+      <text x={MARGEN.venstre - 6} y={12} className="graf-akse" textAnchor="end">
+        mm
+      </text>
+      <text x={MARGEN.venstre + plotBredde + 6} y={12} className="graf-akse">
+        %
+      </text>
+      {soejler.map((s, sIndex) =>
+        s.vaerdier.map((v, i) => {
+          if (v == null || v <= 0) return null
+          const gruppeBredde = soejler.length * soejleBredde + (soejler.length - 1) * 2
+          const x0 =
+            MARGEN.venstre +
+            baandBredde * i +
+            (baandBredde - gruppeBredde) / 2 +
+            sIndex * (soejleBredde + 2)
+          const y = yMm(v)
+          const h = TOP + plotHoejde - y
+          if (h < 0.5) return null
+          return (
+            <path
+              key={`${s.navn}-${i}`}
+              d={soejleSti(x0, y, soejleBredde, h)}
+              fill={s.farve}
+              opacity={tooltip && tooltip.index !== i ? 0.55 : 1}
+            />
+          )
+        }),
+      )}
+      {linjer.map((s) => (
+        <path
+          key={s.navn}
+          d={linjeSti(s.vaerdier, xTilPx, yPct)}
+          fill="none"
+          stroke={s.farve}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+      {tooltip &&
+        linjer.map((s) => {
+          const v = s.vaerdier[tooltip.index]
+          if (v == null) return null
+          return (
+            <circle
+              key={s.navn}
+              cx={xTilPx(tooltip.index)}
+              cy={yPct(v)}
+              r={4}
+              fill={s.farve}
+              className="graf-punkt"
+            />
+          )
+        })}
     </GrafRamme>
   )
 }

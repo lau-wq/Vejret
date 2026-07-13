@@ -157,6 +157,16 @@ main.daempet {
   .nu-detaljer {
     gap: 1rem;
   }
+
+  .uge {
+    font-size: 0.76rem;
+  }
+
+  .uge th,
+  .uge td {
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+  }
 }
 
 .kilde {
@@ -242,6 +252,7 @@ main.daempet {
   gap: 0.45rem;
   font-size: 0.75rem;
   color: var(--tekst-2);
+  white-space: nowrap;
 }
 
 .graf-legend-noegle {
@@ -249,6 +260,12 @@ main.daempet {
   width: 14px;
   height: 3px;
   border-radius: 2px;
+}
+
+/* Søjleserier får en lille firkant som nøgle i stedet for en streg */
+.graf-legend-noegle.soejle {
+  width: 8px;
+  height: 8px;
 }
 
 .graf-flade {
