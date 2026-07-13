@@ -4,59 +4,58 @@ Guidance for AI assistants (Claude Code) working in this repository.
 
 ## Project overview
 
-**Vejret** (Danish for "the weather") is a weather application. The repository
-is newly created and **not yet scaffolded** — as of 2026-07-13 it contains no
-source code. This file documents the intended setup so assistants have a
-starting point; it is based on stated intent, not existing code.
+**Vejret** (Danish for "the weather") is a weather web app built with
+TypeScript + React + Vite. It shows current conditions, the next 12 hours,
+and a 7-day forecast for any city (default: Copenhagen), with a city search
+box. All UI text is in Danish.
 
-> **Important:** Update this file as soon as the project is scaffolded or the
-> plans below change. Do not treat the sections below as descriptions of code
-> that exists — verify against the actual repository state first.
+Weather and geocoding data come from the free **Open-Meteo** API
+(https://open-meteo.com) — no API key or account is required, and there are
+no secrets in this project.
 
-## Intended tech stack
+The repository owner is not a programmer; when communicating about this
+project, prefer plain, non-technical Danish explanations.
 
-- **Language:** TypeScript (strict mode)
-- **Framework:** React
-- **Build tool:** Vite
-- **Package manager:** npm
-- **Weather data:** an external weather API is expected (e.g. DMI Open Data or
-  OpenWeather). API keys belong in `.env` files, which must be gitignored —
-  never commit secrets.
-
-## Commands (once scaffolded)
-
-These are the expected standard commands after Vite scaffolding — they do
-**not** work yet. Check `package.json` scripts before running anything.
+## Commands
 
 ```sh
-npm install        # install dependencies
-npm run dev        # start Vite dev server
-npm run build      # type-check and produce production build
-npm run lint       # lint (if/when configured)
-npm test           # run tests (if/when configured)
+npm install        # install dependencies (first time only)
+npm run dev        # start dev server (http://localhost:5173)
+npm run build      # type-check (tsc -b) and build production bundle to dist/
+npm run preview    # serve the production build locally
 ```
 
-## Planned structure (tentative)
+There is no test suite or linter configured yet.
+
+## Structure
 
 ```
-index.html          # Vite entry HTML
+index.html            # Vite entry HTML (lang="da")
 src/
-  main.tsx          # app entry point
-  App.tsx           # root component
-  components/       # reusable UI components
-  api/              # weather API client code
-public/             # static assets
+  main.tsx            # React entry point
+  App.tsx             # entire UI: search, current weather, hourly strip, 7-day list
+  api/weather.ts      # Open-Meteo client + WMO weather-code → Danish text/emoji mapping
+  index.css           # all styling (plain CSS, no framework)
 ```
 
-## Guidance for AI assistants
+## Conventions
 
-- **Scaffolding:** if asked to bootstrap the project, use
-  `npm create vite@latest . -- --template react-ts`, then update this file to
-  reflect reality (actual scripts, structure, dependencies).
-- **Don't invent state:** never claim commands or files exist without checking;
-  the repo may still be empty or only partially set up.
-- **Keep this file current:** whenever the stack, commands, structure, or
-  conventions change, update CLAUDE.md in the same commit.
-- **Secrets:** weather API keys and other credentials go in `.env` /
-  `.env.local` (gitignored). Provide a committed `.env.example` with variable
-  names only.
+- TypeScript strict mode (see `tsconfig.app.json`); `verbatimModuleSyntax` is
+  on, so type-only imports must use `import type`.
+- Danish is used for UI strings, and Danish identifiers appear in app code
+  (`hentVejr`, `soegSted`, `Sted`, `Vejrdata`) — follow that style.
+- No state-management or styling libraries; plain React hooks and plain CSS.
+  Keep it that way unless the owner asks for more.
+- Weather codes are WMO codes; extend the `VEJRKODER` map in
+  `src/api/weather.ts` if new codes need handling.
+- Wind speed is requested in m/s (`wind_speed_unit=ms`), timezone is `auto`.
+
+## Things to know
+
+- In the remote Claude Code sandbox, outbound requests to `api.open-meteo.com`
+  are blocked by the network policy (proxy returns 403). The app still works in
+  a real browser. To verify UI changes end-to-end in the sandbox, use
+  Playwright with `page.route('**/api.open-meteo.com/**', ...)` to serve mock
+  forecast JSON (see the shape in `src/api/weather.ts` `Vejrdata`).
+- Keep this file current: update it in the same commit whenever commands,
+  structure, or conventions change.

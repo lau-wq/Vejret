@@ -1,0 +1,254 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(165deg, #1e3a8a 0%, #3b82f6 55%, #7dd3fc 100%);
+  min-height: 100vh;
+  color: #0f172a;
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2rem;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+header h1 {
+  color: #fff;
+  font-size: 1.75rem;
+  letter-spacing: 0.02em;
+}
+
+.soeg {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+
+.soeg input {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 999px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.soeg input:focus {
+  outline: 3px solid rgba(255, 255, 255, 0.6);
+}
+
+.forslag {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  list-style: none;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.forslag button {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.forslag button:hover {
+  background: #eff6ff;
+}
+
+.status,
+.fejl {
+  color: #fff;
+  text-align: center;
+  padding: 2rem 0;
+  font-size: 1.1rem;
+}
+
+.fejl {
+  background: rgba(153, 27, 27, 0.85);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+main.dæmpet {
+  opacity: 0.6;
+}
+
+section {
+  margin-bottom: 1.5rem;
+}
+
+h3 {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+
+.nu-kort {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 20px;
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+}
+
+.nu-kort h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.nu-hoved {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.nu-ikon {
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.nu-temp {
+  font-size: 4.5rem;
+  font-weight: 700;
+}
+
+.nu-tekst {
+  font-size: 1.2rem;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+
+.nu-detaljer {
+  display: flex;
+  justify-content: center;
+  gap: 2.5rem;
+}
+
+.nu-detaljer dt {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.nu-detaljer dd {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.timer {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.time {
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 14px;
+  padding: 0.6rem 0.5rem;
+  min-width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.time-tid {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.time-ikon {
+  font-size: 1.4rem;
+}
+
+.time-temp {
+  font-weight: 700;
+}
+
+.time-regn {
+  font-size: 0.72rem;
+  color: #2563eb;
+}
+
+.dage {
+  list-style: none;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+}
+
+.dag {
+  display: grid;
+  grid-template-columns: 1fr 2.2rem 1fr 5.2rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+}
+
+.dag + .dag {
+  border-top: 1px solid #e2e8f0;
+}
+
+.dag-navn {
+  font-weight: 600;
+}
+
+.dag-ikon {
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+.dag-regn {
+  font-size: 0.82rem;
+  color: #2563eb;
+  text-align: right;
+}
+
+.dag-temp {
+  text-align: right;
+  color: #475569;
+}
+
+.dag-temp strong {
+  color: #0f172a;
+}
+
+footer {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
