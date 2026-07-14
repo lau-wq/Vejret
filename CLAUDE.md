@@ -8,11 +8,20 @@ Guidance for AI assistants (Claude Code) working in this repository.
 TypeScript + React + Vite. It **compares forecasts from two national weather
 models** — DMI Harmonie (Denmark) and MET Norway (the model behind YR) — for
 any city (default: Copenhagen), with a city search box. All UI text is in
-Danish. It shows current conditions per model, a 48-hour temperature line
-chart, a combined 48-hour precipitation chart (mm bars per model on the left
-axis + probability lines on a fixed 0–100 % right axis — a deliberate
-dual-axis chart chosen by the owner, mitigated by distinct mark types and
-labeled axes), and a 7-day comparison table.
+Danish. It shows current conditions per model (big temp, "feels like", icon,
+wind — no humidity by owner request), a 48-hour temperature line chart with
+per-model weather-icon rows, a 48-hour wind chart (lines + gust band per
+model + direction-arrow rows under the axis), a combined 48-hour
+precipitation chart (mm bars per model on the left axis + probability lines
+on a fixed 0–100 % right axis — a deliberate dual-axis chart chosen by the
+owner, mitigated by distinct mark types and labeled axes), a precipitation
+radar card, and a 7-day comparison table.
+
+The radar card shows a fixed Denmark/South-Scandinavia extent (2×2 map tiles,
+zoom 6) regardless of the searched city: CARTO dark basemap + RainViewer
+composite tiles (both keyless), with a slider spanning ~60 min back (10-min
+steps) and RainViewer's ~30 min nowcast forward (`nowcast` can be empty —
+labels are computed dynamically).
 
 Weather and geocoding data come from the free **Open-Meteo** API
 (https://open-meteo.com) using its per-model endpoints
@@ -44,7 +53,10 @@ src/
   main.tsx               # React entry point
   App.tsx                # UI: search, per-model "now" cards, charts, 7-day table
   api/weather.ts         # Open-Meteo client (per-model fetches) + WMO code → Danish text
-  components/grafer.tsx  # hand-rolled SVG charts: LinjeGraf, SoejleGraf, KombiGraf (+ tooltip)
+  components/grafer.tsx  # hand-rolled SVG charts: LinjeGraf, SoejleGraf, KombiGraf,
+                         #   VindGraf, IkonRaekker (+ shared tooltip/frame)
+  components/ikoner.tsx  # Vejrikon: WMO code → minimal stroke-SVG glyph
+  components/radar.tsx   # RadarKort: RainViewer + CARTO tiles, time slider
   index.css              # all styling (plain CSS, no framework)
 ```
 
@@ -69,6 +81,8 @@ push to the dev branch rebuilds and republishes via GitHub Actions.
   `components/grafer.tsx`.
 - Weather codes are WMO codes; extend the `VEJRKODER` map in
   `src/api/weather.ts` if new codes need handling.
+- Weather icons are hand-drawn stroke-SVGs in `components/ikoner.tsx`
+  (1.6px stroke, currentColor) — never emoji, never an icon font/library.
 - Wind speed is requested in m/s (`wind_speed_unit=ms`), timezone is `auto`.
 
 ## Things to know

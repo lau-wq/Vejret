@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { Vejrikon } from './ikoner.tsx'
 
 // Fælles SVG-grafer: linjegraf (temperatur) og søjlegraf (nedbør m.m.).
 // Farver og mål følger et fast sæt specifikationer: 2px linjer, hårfine
@@ -12,6 +13,7 @@ export interface Serie {
   enhed?: string // pr. serie (fx i KombiGraf); ellers bruges grafens enhed
   decimaler?: number
   mark?: 'linje' | 'soejle' // styrer legendens nøgleform
+  skjulILegend?: boolean // fx stød-serier, der kun skal med i tooltip
 }
 
 export interface GrafProps {
@@ -124,6 +126,8 @@ function GrafRamme({
   yTilPx,
   visLegend,
   margenHoejre = MARGEN.hoejre,
+  hoejde = HOEJDE,
+  margenBund = MARGEN.bund,
 }: {
   serier: Serie[]
   tider: string[]
@@ -139,13 +143,15 @@ function GrafRamme({
   yTilPx: (v: number) => number
   visLegend: boolean
   margenHoejre?: number
+  hoejde?: number
+  margenBund?: number
 }) {
   const plotBredde = bredde - MARGEN.venstre - margenHoejre
   return (
     <div className="graf" ref={ref}>
       {visLegend && (
         <div className="graf-legend">
-          {serier.map((s) => (
+          {serier.filter((s) => !s.skjulILegend).map((s) => (
             <span className="graf-legend-punkt" key={s.navn}>
               <span
                 className={
@@ -161,7 +167,7 @@ function GrafRamme({
       <div className="graf-flade">
         <svg
           width={bredde}
-          height={HOEJDE}
+          height={hoejde}
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
         >
@@ -187,7 +193,7 @@ function GrafRamme({
               <text
                 key={iso}
                 x={x}
-                y={HOEJDE - 6}
+                y={hoejde - margenBund + 16}
                 className={erMidnat ? 'graf-akse graf-akse-dag' : 'graf-akse'}
                 textAnchor="middle"
               >
@@ -201,7 +207,7 @@ function GrafRamme({
               x1={tooltip.x}
               x2={tooltip.x}
               y1={MARGEN.top}
-              y2={HOEJDE - MARGEN.bund}
+              y2={hoejde - margenBund}
               className="graf-krydssigte"
             />
           )}
@@ -217,6 +223,36 @@ function GrafRamme({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+// Rækker af små vejrikoner, justeret til grafernes plotområde.
+export interface IkonRaekke {
+  navn: string
+  farve: string
+  koder: (number | null)[]
+}
+
+export function IkonRaekker({ raekker }: { raekker: IkonRaekke[] }) {
+  const [ref, bredde] = useBredde()
+  const plotBredde = bredde - MARGEN.venstre - MARGEN.hoejre
+  // Hver 3. time; på smalle skærme hver 6. så ikonerne ikke klumper.
+  const trin = plotBredde / raekker[0].koder.length < 11 ? 6 : 3
+  return (
+    <div ref={ref}>
+      {raekker.map((r) => (
+        <div className="ikonraekke" key={r.navn}>
+          <span className="ikonraekke-navn" style={{ width: MARGEN.venstre - 6 }}>
+            {r.navn}
+          </span>
+          <span className="ikonraekke-ikoner" style={{ marginRight: MARGEN.hoejre }}>
+            {r.koder.map((code, i) =>
+              i % trin === 0 ? <Vejrikon key={i} code={code} stoerrelse={17} /> : null,
+            )}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -481,6 +517,149 @@ export function KombiGraf({
               key={s.navn}
               cx={xTilPx(tooltip.index)}
               cy={yPct(v)}
+              r={4}
+              fill={s.farve}
+              className="graf-punkt"
+            />
+          )
+        })}
+    </GrafRamme>
+  )
+}
+
+// Vindgraf: linje = middelvind, bånd = op til vindstød, pile = retning.
+export interface VindSerie {
+  navn: string
+  farve: string
+  hastighed: (number | null)[]
+  stoed: (number | null)[]
+  retning: (number | null)[]
+}
+
+const PILE_RAEKKE_HOEJDE = 18
+
+export function VindGraf({ vind, tider }: { vind: VindSerie[]; tider: string[] }) {
+  const margenBund = MARGEN.bund + 4 + vind.length * PILE_RAEKKE_HOEJDE
+  const hoejde = HOEJDE + vind.length * PILE_RAEKKE_HOEJDE + 4
+  const [ref, bredde] = useBredde()
+  const { tooltip, onPointerMove, onPointerLeave } = brugTooltip(tider, bredde)
+
+  const alle = vind
+    .flatMap((s) => [...s.hastighed, ...s.stoed])
+    .filter((v): v is number => v != null)
+  const max = Math.max(2, Math.ceil(Math.max(...alle, 0) * 1.1))
+  const plotBredde = bredde - MARGEN.venstre - MARGEN.hoejre
+  const plotHoejde = hoejde - MARGEN.top - margenBund
+  const yTilPx = (v: number) => MARGEN.top + plotHoejde - (v / max) * plotHoejde
+  const xTilPx = (i: number) => MARGEN.venstre + (plotBredde * (i + 0.5)) / tider.length
+  const yTicks = pæneTicks(0, max)
+  const pileTrin = plotBredde / tider.length < 11 ? 6 : 3
+
+  // Tooltip-serier: vind + stød pr. model (stød skjules i legenden).
+  const tooltipSerier: Serie[] = vind.flatMap((s) => [
+    { navn: s.navn, farve: s.farve, vaerdier: s.hastighed, enhed: 'm/s', decimaler: 1 },
+    {
+      navn: `${s.navn} stød`,
+      farve: s.farve,
+      vaerdier: s.stoed,
+      enhed: 'm/s',
+      decimaler: 1,
+      skjulILegend: true,
+    },
+  ])
+
+  // Areal mellem hastighed og stød (kun hvor begge findes).
+  function baandSti(s: VindSerie): string {
+    let sti = ''
+    let start = -1
+    for (let i = 0; i <= s.hastighed.length; i++) {
+      const ok = i < s.hastighed.length && s.hastighed[i] != null && s.stoed[i] != null
+      if (ok && start === -1) start = i
+      if (!ok && start !== -1) {
+        const op = []
+        const ned = []
+        for (let j = start; j < i; j++) {
+          // Stød kan aldrig være under middelvinden — klem for en sikkerheds skyld.
+          op.push(`${xTilPx(j)},${yTilPx(Math.max(s.stoed[j]!, s.hastighed[j]!))}`)
+          ned.unshift(`${xTilPx(j)},${yTilPx(s.hastighed[j]!)}`)
+        }
+        sti += `M${op.join(' L')} L${ned.join(' L')} Z `
+        start = -1
+      }
+    }
+    return sti.trim()
+  }
+
+  return (
+    <GrafRamme
+      serier={tooltipSerier}
+      tider={tider}
+      enhed="m/s"
+      decimaler={1}
+      tooltip={tooltip}
+      bredde={bredde}
+      ref={ref}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      yTicks={yTicks}
+      yTilPx={yTilPx}
+      visLegend={vind.length > 1}
+      hoejde={hoejde}
+      margenBund={margenBund}
+    >
+      {vind.map((s) => (
+        <path key={s.navn + '-baand'} d={baandSti(s)} fill={s.farve} opacity={0.14} />
+      ))}
+      {vind.map((s) => (
+        <path
+          key={s.navn}
+          d={linjeSti(s.hastighed, xTilPx, yTilPx)}
+          fill="none"
+          stroke={s.farve}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+      {/* Pile-rækker under aksen: peger hvorhen vinden blæser (retning + 180°) */}
+      {vind.map((s, r) => {
+        const y = hoejde - margenBund + 24 + r * PILE_RAEKKE_HOEJDE + PILE_RAEKKE_HOEJDE / 2
+        return (
+          <g key={s.navn + '-pile'}>
+            <text x={MARGEN.venstre - 6} y={y + 3} className="graf-akse" textAnchor="end">
+              {s.navn}
+            </text>
+            {s.retning.map((retn, i) => {
+              if (retn == null || i % pileTrin !== 0) return null
+              return (
+                <g
+                  key={i}
+                  transform={`translate(${xTilPx(i)},${y}) rotate(${retn + 180})`}
+                  opacity={0.9}
+                >
+                  <path
+                    d="M0 4.5 L0 -4.5 M0 -4.5 L-3 -1 M0 -4.5 L3 -1"
+                    stroke={s.farve}
+                    strokeWidth={1.6}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </g>
+              )
+            })}
+          </g>
+        )
+      })}
+      {tooltip &&
+        vind.map((s) => {
+          const v = s.hastighed[tooltip.index]
+          if (v == null) return null
+          return (
+            <circle
+              key={s.navn}
+              cx={xTilPx(tooltip.index)}
+              cy={yTilPx(v)}
               r={4}
               fill={s.farve}
               className="graf-punkt"

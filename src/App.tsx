@@ -10,7 +10,16 @@ import {
   type ModelVejr,
   type Sted,
 } from './api/weather.ts'
-import { KombiGraf, LinjeGraf, type Serie } from './components/grafer.tsx'
+import {
+  IkonRaekker,
+  KombiGraf,
+  LinjeGraf,
+  VindGraf,
+  type Serie,
+  type VindSerie,
+} from './components/grafer.tsx'
+import { Vejrikon } from './components/ikoner.tsx'
+import { RadarKort } from './components/radar.tsx'
 
 const STANDARD_STED: Sted = {
   id: 2618425,
@@ -138,6 +147,13 @@ export default function App() {
     farve: m.farve,
     vaerdier: udsnit(m.vejr!.hourly.temperature_2m, fra, TIMER_I_GRAF),
   }))
+  const vindSerier: VindSerie[] = modeller.map((m) => ({
+    navn: m.kort,
+    farve: m.farve,
+    hastighed: udsnit(m.vejr!.hourly.wind_speed_10m, fra, TIMER_I_GRAF),
+    stoed: udsnit(m.vejr!.hourly.wind_gusts_10m, fra, TIMER_I_GRAF),
+    retning: udsnit(m.vejr!.hourly.wind_direction_10m, fra, TIMER_I_GRAF),
+  }))
   const nedboerSerier: Serie[] = modeller.map((m) => ({
     navn: `${m.kort} mm`,
     farve: m.farve,
@@ -220,17 +236,16 @@ export default function App() {
                     {m.kort}
                   </div>
                   <div className="nu-temp">{fmt(h.temperature_2m[fra])}°</div>
-                  <div className="nu-tekst">{beskrivVejr(h.weather_code[fra])}</div>
-                  <dl className="nu-detaljer">
-                    <div>
-                      <dt>Vind</dt>
-                      <dd>{fmt(h.wind_speed_10m[fra])} m/s</dd>
-                    </div>
-                    <div>
-                      <dt>Fugtighed</dt>
-                      <dd>{fmt(h.relative_humidity_2m[fra])} %</dd>
-                    </div>
-                  </dl>
+                  <div className="foeles">
+                    Føles som <strong>{fmt(h.apparent_temperature[fra])}°</strong>
+                  </div>
+                  <div className="nu-vejr">
+                    <Vejrikon code={h.weather_code[fra]} stoerrelse={22} />
+                    {beskrivVejr(h.weather_code[fra])}
+                  </div>
+                  <div className="nu-vind">
+                    Vind <strong>{fmt(h.wind_speed_10m[fra])} m/s</strong>
+                  </div>
                 </article>
               )
             })}
@@ -247,6 +262,21 @@ export default function App() {
           <section className="kort">
             <h2>Temperatur · næste 48 timer · °C</h2>
             <LinjeGraf serier={tempSerier} tider={tider} enhed="°C" />
+            <IkonRaekker
+              raekker={modeller.map((m) => ({
+                navn: m.kort,
+                farve: m.farve,
+                koder: udsnit(m.vejr!.hourly.weather_code, fra, TIMER_I_GRAF),
+              }))}
+            />
+          </section>
+
+          <section className="kort">
+            <h2>Vind · næste 48 timer · m/s</h2>
+            <VindGraf vind={vindSerier} tider={tider} />
+            <p className="fodnote">
+              Bånd = op til vindstød. Pile under aksen = vindens retning (hvorhen den blæser).
+            </p>
           </section>
 
           <section className="kort">
@@ -256,6 +286,15 @@ export default function App() {
               Søjler = nedbør i mm (venstre akse). Linjer = sandsynlighed i % (højre akse).
               YR % = MET Norges officielle sandsynlighed; Ensemble % = samlet international
               prognose. DMI udgiver ikke sandsynligheder uden API-nøgle.
+            </p>
+          </section>
+
+          <section className="kort">
+            <h2>Radar · Danmark</h2>
+            <RadarKort />
+            <p className="fodnote">
+              Radar: RainViewer · Kort: © OpenStreetMap · CARTO. Fremskrivningen rækker
+              ~30 min; radaren dækker altid Danmark, uanset valgt by.
             </p>
           </section>
 
@@ -313,6 +352,9 @@ export default function App() {
                   {psSerie.map((s) => (
                     <th key={s.navn}>{s.navn}</th>
                   ))}
+                  {vindSerier.map((s) => (
+                    <th key={s.navn + '-vind'}>{s.navn} m/s</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -327,6 +369,9 @@ export default function App() {
                     ))}
                     {psSerie.map((s) => (
                       <td key={s.navn}>{fmt(s.vaerdier[i])}</td>
+                    ))}
+                    {vindSerier.map((s) => (
+                      <td key={s.navn + '-vind'}>{fmt(s.hastighed[i], 1)}</td>
                     ))}
                   </tr>
                 ))}

@@ -23,10 +23,12 @@ export interface ModelVejr {
   hourly: {
     time: string[]
     temperature_2m: (number | null)[]
+    apparent_temperature: (number | null)[]
     precipitation: (number | null)[]
     weather_code: (number | null)[]
     wind_speed_10m: (number | null)[]
-    relative_humidity_2m: (number | null)[]
+    wind_direction_10m: (number | null)[]
+    wind_gusts_10m: (number | null)[]
   }
   daily: {
     time: string[]
@@ -60,7 +62,7 @@ export async function hentModelVejr(
   url.searchParams.set('models', model)
   url.searchParams.set(
     'hourly',
-    'temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m',
+    'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m',
   )
   url.searchParams.set(
     'daily',
