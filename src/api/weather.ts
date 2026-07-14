@@ -76,27 +76,40 @@ export async function hentModelVejr(
   return res.json()
 }
 
-// Ensemble-sandsynlighed for nedbør fra den samlede prognose (best_match).
+// Samlet prognose (best_match): sandsynlighed for nedbør og UV-indeks.
 // De nationale modeller hos Open-Meteo har ikke egne sandsynligheder — de
 // falder alle tilbage til denne fælles beregning.
-export async function hentNedboersSandsynlighed(
+export async function hentSamletPrognose(
   latitude: number,
   longitude: number,
 ): Promise<{
   time: string[]
   precipitation_probability: (number | null)[]
+  uv_index: (number | null)[]
   utc_offset_seconds: number
 }> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(latitude))
   url.searchParams.set('longitude', String(longitude))
-  url.searchParams.set('hourly', 'precipitation_probability')
+  url.searchParams.set('hourly', 'precipitation_probability,uv_index')
   url.searchParams.set('timezone', 'auto')
   url.searchParams.set('forecast_days', '3')
   const res = await fetch(url)
-  if (!res.ok) throw new Error('Kunne ikke hente nedbørssandsynlighed')
+  if (!res.ok) throw new Error('Kunne ikke hente den samlede prognose')
   const data = await res.json()
   return { ...data.hourly, utc_offset_seconds: data.utc_offset_seconds }
+}
+
+// Stednavn ud fra koordinater (gratis klient-tjeneste, ingen nøgle).
+export async function hentStednavn(latitude: number, longitude: number): Promise<string | null> {
+  const url = new URL('https://api.bigdatacloud.net/data/reverse-geocode-client')
+  url.searchParams.set('latitude', String(latitude))
+  url.searchParams.set('longitude', String(longitude))
+  url.searchParams.set('localityLanguage', 'da')
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.city || data.locality || null
 }
 
 // Ægte YR-sandsynlighed for nedbør fra MET Norges officielle API.

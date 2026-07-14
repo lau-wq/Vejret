@@ -3,7 +3,8 @@ import {
   MODELLER,
   beskrivVejr,
   hentModelVejr,
-  hentNedboersSandsynlighed,
+  hentSamletPrognose,
+  hentStednavn,
   hentYrSandsynlighed,
   soegSted,
   type Model,
@@ -14,6 +15,7 @@ import {
   IkonRaekker,
   KombiGraf,
   LinjeGraf,
+  UvGraf,
   VindGraf,
   type Serie,
   type VindSerie,
@@ -45,6 +47,7 @@ interface Datasæt {
   sandsynlighed: {
     time: string[]
     precipitation_probability: (number | null)[]
+    uv_index: (number | null)[]
     utc_offset_seconds: number
   } | null
   yrSandsynlighed: Map<number, number> | null
@@ -90,12 +93,15 @@ export default function App() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (harValgtManuelt.current) return
-        setSted({
-          id: -1,
-          name: 'Din placering',
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        })
+        const { latitude, longitude } = pos.coords
+        setSted({ id: -1, name: 'Din placering', latitude, longitude })
+        // Slå det faktiske stednavn op og opdater kun navnet (samme koordinater).
+        hentStednavn(latitude, longitude)
+          .then((navn) => {
+            if (!navn || harValgtManuelt.current) return
+            setSted((s) => (s.id === -1 ? { ...s, name: `${navn} (din placering)` } : s))
+          })
+          .catch(() => {})
       },
       () => {}, // afvist/fejl → bliv på København
       { timeout: 8000, maximumAge: 600000 },
@@ -109,7 +115,7 @@ export default function App() {
     Promise.allSettled([
       hentModelVejr(sted.latitude, sted.longitude, 'dmi_seamless'),
       hentModelVejr(sted.latitude, sted.longitude, 'metno_seamless'),
-      hentNedboersSandsynlighed(sted.latitude, sted.longitude),
+      hentSamletPrognose(sted.latitude, sted.longitude),
       hentYrSandsynlighed(sted.latitude, sted.longitude),
     ]).then(([dmi, yr, ps, yrPs]) => {
       if (annulleret) return
@@ -129,7 +135,8 @@ export default function App() {
     return () => {
       annulleret = true
     }
-  }, [sted])
+    // Kun nye koordinater skal genhente data — et rent navneskift skal ikke.
+  }, [sted.latitude, sted.longitude])
 
   function onSoeg(tekst: string) {
     setSoegetekst(tekst)
@@ -181,7 +188,6 @@ export default function App() {
     farve: m.farve,
     enhed: 'mm',
     decimaler: 1,
-    mark: 'soejle',
     vaerdier: udsnit(m.vejr!.hourly.precipitation, fra, TIMER_I_GRAF),
   }))
 
@@ -197,7 +203,6 @@ export default function App() {
         farve: FARVER.metno_seamless,
         enhed: '%',
         decimaler: 0,
-        mark: 'linje',
         vaerdier: tider.map((t) => data.yrSandsynlighed!.get(epoch(t)) ?? null),
       })
     }
@@ -212,9 +217,23 @@ export default function App() {
       farve: FARVE_SANDSYNLIGHED,
       enhed: '%',
       decimaler: 0,
-      mark: 'linje',
       vaerdier: tider.map((t) => ensembleKort.get(epoch(t)) ?? null),
     })
+  }
+
+  // UV for dagens døgn (stedets lokale dato, som API'et leverer direkte).
+  let uvIDag: (number | null)[] = []
+  let uvNuTime = 0
+  if (data?.sandsynlighed && reference) {
+    const dagensDato = reference.hourly.time[fra]?.slice(0, 10)
+    uvIDag = Array.from({ length: 24 }, (_, t) => {
+      const i = data.sandsynlighed!.time.indexOf(
+        `${dagensDato}T${String(t).padStart(2, '0')}:00`,
+      )
+      return i === -1 ? null : data.sandsynlighed!.uv_index[i]
+    })
+    const nuIso = reference.hourly.time[fra]
+    uvNuTime = Number(nuIso.slice(11, 13)) + new Date().getMinutes() / 60
   }
 
   return (
@@ -301,6 +320,18 @@ export default function App() {
             </p>
           </section>
 
+          {uvIDag.some((v) => v != null) && (
+            <section className="kort">
+              <h2>UV-indeks · i dag</h2>
+              <UvGraf vaerdier={uvIDag} nuTime={uvNuTime} />
+              <p className="fodnote">
+                Farven på kurven viser niveauet nu og resten af dagen — fra gul (UV 3) bør du
+                bruge solcreme. Grå = tid, der er gået. Prikken markerer nu. Kilde: samlet
+                prognose.
+              </p>
+            </section>
+          )}
+
           <section className="kort">
             <h2>Nedbør og sandsynlighed · næste 48 timer · mm / %</h2>
             <KombiGraf soejler={nedboerSerier} linjer={psSerie} tider={tider} />
@@ -359,47 +390,6 @@ export default function App() {
             </table>
           </details>
 
-          <details className="tabelvisning">
-            <summary>Vis timedata som tabel</summary>
-            <table className="uge">
-              <thead>
-                <tr>
-                  <th>Tid</th>
-                  {modeller.map((m) => (
-                    <th key={m.id}>{m.kort} °C</th>
-                  ))}
-                  {modeller.map((m) => (
-                    <th key={m.id + '-mm'}>{m.kort} mm</th>
-                  ))}
-                  {psSerie.map((s) => (
-                    <th key={s.navn}>{s.navn}</th>
-                  ))}
-                  {vindSerier.map((s) => (
-                    <th key={s.navn + '-vind'}>{s.navn} m/s</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tider.map((iso, i) => (
-                  <tr key={iso}>
-                    <td>{iso.slice(5, 10)} {iso.slice(11, 16)}</td>
-                    {tempSerier.map((s) => (
-                      <td key={s.navn}>{fmt(s.vaerdier[i], 1)}</td>
-                    ))}
-                    {nedboerSerier.map((s) => (
-                      <td key={s.navn + '-mm'}>{fmt(s.vaerdier[i], 1)}</td>
-                    ))}
-                    {psSerie.map((s) => (
-                      <td key={s.navn}>{fmt(s.vaerdier[i])}</td>
-                    ))}
-                    {vindSerier.map((s) => (
-                      <td key={s.navn + '-vind'}>{fmt(s.hastighed[i], 1)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
         </main>
       )}
 

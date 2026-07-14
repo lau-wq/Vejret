@@ -7,9 +7,28 @@ import { useBredde } from './grafer.tsx'
 // Baggrundskort: CARTO dark (OpenStreetMap-data).
 
 const START_CENTER = { lat: 56.0, lon: 11.5 } // Danmarks midte
-const START_ZOOM = 7
+const START_ZOOM = 6
 const MIN_ZOOM = 5
 const MAX_ZOOM = 9
+
+// Eget label-lag med danske stednavne (fliserne er uden tekst, så stavningen
+// er vores egen). minZoom styrer, hvornår byen dukker op.
+const BYER: { navn: string; lat: number; lon: number; minZoom: number }[] = [
+  { navn: 'København', lat: 55.676, lon: 12.566, minZoom: 5 },
+  { navn: 'Aarhus', lat: 56.157, lon: 10.21, minZoom: 6 },
+  { navn: 'Odense', lat: 55.396, lon: 10.388, minZoom: 7 },
+  { navn: 'Aalborg', lat: 57.048, lon: 9.919, minZoom: 6 },
+  { navn: 'Esbjerg', lat: 55.476, lon: 8.46, minZoom: 7 },
+  { navn: 'Rønne', lat: 55.1, lon: 14.7, minZoom: 7 },
+  { navn: 'Hamborg', lat: 53.551, lon: 9.994, minZoom: 5 },
+  { navn: 'Kiel', lat: 54.323, lon: 10.14, minZoom: 7 },
+  { navn: 'Flensborg', lat: 54.782, lon: 9.437, minZoom: 8 },
+  { navn: 'Malmø', lat: 55.605, lon: 13.0, minZoom: 7 },
+  { navn: 'Gøteborg', lat: 57.709, lon: 11.975, minZoom: 6 },
+  { navn: 'Stockholm', lat: 59.329, lon: 18.069, minZoom: 5 },
+  { navn: 'Oslo', lat: 59.914, lon: 10.752, minZoom: 5 },
+  { navn: 'Berlin', lat: 52.52, lon: 13.405, minZoom: 5 },
+]
 const GRAENSER = { minLat: 50, maxLat: 62, minLon: 0, maxLon: 22 }
 const FLISE = 256
 
@@ -154,7 +173,7 @@ export function RadarKort() {
             key={`kort-${zoom}-${f.x}-${f.y}`}
             className="radar-flise"
             style={{ left: f.left, top: f.top }}
-            src={`https://a.basemaps.cartocdn.com/dark_all/${zoom}/${f.x}/${f.y}.png`}
+            src={`https://a.basemaps.cartocdn.com/dark_nolabels/${zoom}/${f.x}/${f.y}.png`}
             alt=""
             draggable={false}
           />
@@ -173,6 +192,16 @@ export function RadarKort() {
             />
           )),
         )}
+        {BYER.filter((b) => zoom >= b.minZoom).map((b) => {
+          const x = lonTilPx(b.lon, zoom) - topVenstreX
+          const y = latTilPx(b.lat, zoom) - topVenstreY
+          if (x < 4 || x > stoerrelse - 4 || y < 4 || y > stoerrelse - 4) return null
+          return (
+            <span className="radar-bynavn" key={b.navn} style={{ left: x, top: y }}>
+              {b.navn}
+            </span>
+          )
+        })}
         <span className="radar-tid">{tidLabel}</span>
         <div className="radar-zoomknapper" onPointerDown={(e) => e.stopPropagation()}>
           <button

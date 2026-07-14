@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Vejrikon } from './ikoner.tsx'
 
@@ -12,7 +12,6 @@ export interface Serie {
   vaerdier: (number | null)[]
   enhed?: string // pr. serie (fx i KombiGraf); ellers bruges grafens enhed
   decimaler?: number
-  mark?: 'linje' | 'soejle' // styrer legendens nøgleform
   skjulILegend?: boolean // fx stød-serier, der kun skal med i tooltip
 }
 
@@ -153,12 +152,7 @@ function GrafRamme({
         <div className="graf-legend">
           {serier.filter((s) => !s.skjulILegend).map((s) => (
             <span className="graf-legend-punkt" key={s.navn}>
-              <span
-                className={
-                  s.mark === 'soejle' ? 'graf-legend-noegle soejle' : 'graf-legend-noegle'
-                }
-                style={{ background: s.farve }}
-              />
+              <span className="graf-legend-noegle" style={{ background: s.farve }} />
               {s.navn}
             </span>
           ))}
@@ -667,5 +661,182 @@ export function VindGraf({ vind, tider }: { vind: VindSerie[]; tider: string[] }
           )
         })}
     </GrafRamme>
+  )
+}
+
+// UV-døgngraf: dagens UV-kurve beskåret til dagslys-vinduet. Tiden, der er
+// gået, tegnes gråt; resten farves efter UV-niveau via en lodret gradient
+// (statusfarver — UV er en tilstand, ikke en datakilde).
+const UV_ZONER = [
+  { navn: 'lav 0–2', farve: '#0ca30c' },
+  { navn: 'moderat 3–5 · solcreme', farve: '#fab219' },
+  { navn: 'høj 6–7', farve: '#ec835a' },
+  { navn: 'meget høj 8+', farve: '#d03b3b' },
+  { navn: 'gået tid', farve: '#898781' },
+]
+
+function uvFarve(v: number): string {
+  if (v < 3) return UV_ZONER[0].farve
+  if (v < 6) return UV_ZONER[1].farve
+  if (v < 8) return UV_ZONER[2].farve
+  return UV_ZONER[3].farve
+}
+
+const UV_HOEJDE = 190
+
+export function UvGraf({
+  vaerdier,
+  nuTime,
+}: {
+  vaerdier: (number | null)[] // 24 timeværdier for i dag (index = klokketime)
+  nuTime: number // aktuel time inkl. brøkdel, fx 14.4
+}) {
+  const [ref, bredde] = useBredde()
+  const id = useId()
+
+  const tal = vaerdier.map((v) => v ?? 0)
+  // Dagslys-vindue: første..sidste time med UV > 0, med en times luft.
+  let foerste = tal.findIndex((v) => v > 0)
+  let sidste = tal.length - 1 - [...tal].reverse().findIndex((v) => v > 0)
+  if (foerste === -1) {
+    foerste = 6
+    sidste = 22
+  } else {
+    foerste = Math.max(0, foerste - 1)
+    sidste = Math.min(23, sidste + 1)
+  }
+
+  const MARGEN_UV = { top: 16, hoejre: 8, bund: 24, venstre: 34 }
+  const plotBredde = bredde - MARGEN_UV.venstre - MARGEN_UV.hoejre
+  const plotHoejde = UV_HOEJDE - MARGEN_UV.top - MARGEN_UV.bund
+  const maxUv = Math.max(...tal)
+  const maxY = Math.max(8, Math.ceil(maxUv))
+  const x = (time: number) =>
+    MARGEN_UV.venstre + (plotBredde * (time - foerste)) / (sidste - foerste)
+  const y = (v: number) => MARGEN_UV.top + plotHoejde - (v / maxY) * plotHoejde
+  const bund = MARGEN_UV.top + plotHoejde
+
+  // Interpolér pr. kvarter for en glat kurve.
+  const uvVed = (t: number) => {
+    const i = Math.floor(t)
+    const brok = t - i
+    const a = tal[Math.min(23, Math.max(0, i))]
+    const b = tal[Math.min(23, Math.max(0, i + 1))]
+    return a + (b - a) * brok
+  }
+  let linje = ''
+  let omraade = `M${x(foerste)},${y(0)} `
+  for (let t = foerste; t <= sidste + 0.001; t += 0.25) {
+    const punkt = `${x(t)},${y(uvVed(t))} `
+    linje += `${linje ? 'L' : 'M'}${punkt}`
+    omraade += `L${punkt}`
+  }
+  omraade += `L${x(sidste)},${y(0)} Z`
+
+  const nuX = Math.min(Math.max(nuTime, foerste), sidste)
+  const nuIndenfor = nuTime >= foerste && nuTime <= sidste
+  const nuUv = uvVed(nuX)
+
+  // Gradient-stop ved zonetærsklerne (med smalle blændbånd).
+  const stop = (v: number) => `${Math.min(100, (v / maxY) * 100)}%`
+  const maksTime = tal.indexOf(maxUv)
+  const fmt1 = (v: number) => v.toFixed(1).replace('.', ',')
+
+  const ticks = pæneTicks(0, maxY)
+
+  return (
+    <div className="graf" ref={ref}>
+      <div className="graf-legend">
+        {UV_ZONER.map((z) => (
+          <span className="graf-legend-punkt" key={z.navn}>
+            <span className="graf-legend-noegle" style={{ background: z.farve }} />
+            {z.navn}
+          </span>
+        ))}
+      </div>
+      <svg width={bredde} height={UV_HOEJDE}>
+        <defs>
+          <linearGradient
+            id={`${id}-grad`}
+            gradientUnits="userSpaceOnUse"
+            x1={0}
+            y1={y(0)}
+            x2={0}
+            y2={y(maxY)}
+          >
+            <stop offset="0%" stopColor={UV_ZONER[0].farve} />
+            <stop offset={stop(2.8)} stopColor={UV_ZONER[0].farve} />
+            <stop offset={stop(3.2)} stopColor={UV_ZONER[1].farve} />
+            <stop offset={stop(5.8)} stopColor={UV_ZONER[1].farve} />
+            <stop offset={stop(6.2)} stopColor={UV_ZONER[2].farve} />
+            <stop offset={stop(7.8)} stopColor={UV_ZONER[2].farve} />
+            <stop offset={stop(8.2)} stopColor={UV_ZONER[3].farve} />
+          </linearGradient>
+          <clipPath id={`${id}-foer`}>
+            <rect x={0} y={0} width={x(nuX)} height={UV_HOEJDE} />
+          </clipPath>
+          <clipPath id={`${id}-efter`}>
+            <rect x={x(nuX)} y={0} width={Math.max(0, bredde - x(nuX))} height={UV_HOEJDE} />
+          </clipPath>
+        </defs>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={MARGEN_UV.venstre} x2={MARGEN_UV.venstre + plotBredde} y1={y(t)} y2={y(t)} className="graf-grid" />
+            <text x={MARGEN_UV.venstre - 6} y={y(t) + 3} className="graf-akse" textAnchor="end">
+              {t}
+            </text>
+          </g>
+        ))}
+        <path d={omraade} fill="#898781" opacity={0.08} clipPath={`url(#${id}-foer)`} />
+        <path d={omraade} fill={`url(#${id}-grad)`} opacity={0.12} clipPath={`url(#${id}-efter)`} />
+        <path
+          d={linje}
+          fill="none"
+          stroke="#898781"
+          strokeWidth={2}
+          strokeLinecap="round"
+          clipPath={`url(#${id}-foer)`}
+        />
+        <path
+          d={linje}
+          fill="none"
+          stroke={`url(#${id}-grad)`}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          clipPath={`url(#${id}-efter)`}
+        />
+        {nuIndenfor && (
+          <>
+            <line x1={x(nuX)} x2={x(nuX)} y1={MARGEN_UV.top - 2} y2={bund} className="graf-krydssigte" />
+            <circle cx={x(nuX)} cy={y(nuUv)} r={4.5} fill={uvFarve(nuUv)} className="graf-punkt" />
+            <text
+              x={Math.min(x(nuX) + 8, bredde - 70)}
+              y={MARGEN_UV.top + 2}
+              className="graf-akse"
+              fill="#c3c2b7"
+            >
+              nu · UV {fmt1(nuUv)}
+            </text>
+          </>
+        )}
+        {maxUv > 0 && (
+          <text
+            x={x(Math.max(maksTime, foerste + 1.5)) - 8}
+            y={y(maxUv) - 10}
+            className="graf-akse"
+            textAnchor="end"
+          >
+            maks {fmt1(maxUv)} · kl. {String(maksTime).padStart(2, '0')}
+          </text>
+        )}
+        {Array.from({ length: sidste - foerste + 1 }, (_, i) => foerste + i)
+          .filter((t) => t % 2 === 0)
+          .map((t) => (
+            <text key={t} x={x(t)} y={UV_HOEJDE - 6} className="graf-akse" textAnchor="middle">
+              {String(t).padStart(2, '0')}
+            </text>
+          ))}
+      </svg>
+    </div>
   )
 }

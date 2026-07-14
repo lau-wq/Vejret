@@ -8,7 +8,8 @@ Guidance for AI assistants (Claude Code) working in this repository.
 TypeScript + React + Vite. It **compares forecasts from two national weather
 models** — DMI Harmonie (Denmark) and MET Norway (the model behind YR) — for
 any city, with a city search box. On load it asks for browser geolocation and
-uses the user's position ("Din placering") as the default; it falls back to
+uses the user's position as the default, reverse-geocoding the place name via
+BigDataCloud's keyless client API ("<by> (din placering)"); it falls back to
 Copenhagen if denied. All UI text is in
 Danish. It shows current conditions per model (big temp, "feels like", icon,
 wind — no humidity by owner request), a 48-hour temperature line chart with
@@ -17,17 +18,29 @@ model + direction-arrow rows under the axis), a combined 48-hour
 precipitation chart (mm bars per model on the left axis + probability lines
 on a fixed 0–100 % right axis — a deliberate dual-axis chart chosen by the
 owner, mitigated by distinct mark types and labeled axes), a precipitation
-radar card, and a 7-day comparison table (collapsed in a `<details>` by
-default, like the hourly table).
+radar card, a UV-index card for the current day, and a 7-day comparison
+table (collapsed in a `<details>` by default; there is no hourly table —
+the owner had it removed).
+
+The UV card (`UvGraf` in `components/grafer.tsx`) shows today only, cropped
+to the daylight window: the elapsed part of the day is gray, the rest is
+colored by UV level via a vertical SVG gradient using the status palette
+(green `#0ca30c` 0–2, yellow `#fab219` 3–5 "solcreme", orange `#ec835a` 6–7,
+red `#d03b3b` 8+), with a "nu" dot/hairline and a "maks" label. Data comes
+from best_match `uv_index` (fetched together with precipitation probability
+in `hentSamletPrognose`).
 
 The radar card starts centered on Denmark (fixed center, regardless of the
-searched city) at zoom 7, with +/− zoom buttons (zoom 5–9) and drag-to-pan
+searched city) at zoom 6, with +/− zoom buttons (zoom 5–9) and drag-to-pan
 (clamped to roughly the Nordics). Tiles are computed dynamically from
 center/zoom via Web-Mercator math in `components/radar.tsx`: CARTO dark
-basemap + RainViewer composite tiles (both keyless), with a slider spanning
-~60 min back (10-min steps) and RainViewer's ~30 min nowcast forward
-(`nowcast` can be empty — labels are computed dynamically). The slider uses a
-neutral gray accent (owner request: no blue).
+**nolabels** basemap + RainViewer composite tiles (both keyless) + an own
+label layer with Danish city names (curated `BYER` list with per-city
+min-zoom), and a slider spanning ~60 min back (10-min steps) and
+RainViewer's ~30 min nowcast forward (`nowcast` can be empty — labels are
+computed dynamically). The slider uses a neutral gray accent (owner request:
+no blue). All chart legends use stroke keys (no square swatches — owner
+request).
 
 Weather and geocoding data come from the free **Open-Meteo** API
 (https://open-meteo.com) using its per-model endpoints
