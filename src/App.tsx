@@ -99,7 +99,7 @@ export default function App() {
         hentStednavn(latitude, longitude)
           .then((navn) => {
             if (!navn || harValgtManuelt.current) return
-            setSted((s) => (s.id === -1 ? { ...s, name: `${navn} (din placering)` } : s))
+            setSted((s) => (s.id === -1 ? { ...s, name: navn } : s))
           })
           .catch(() => {})
       },
@@ -265,7 +265,26 @@ export default function App() {
 
       {reference && (
         <main className={henter ? 'daempet' : ''}>
-          <h1>{stedLabel(sted)}</h1>
+          <div className="sted">
+            {sted.id === -1 && (
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-label="Din placering"
+              >
+                <path d="M12 21 C12 21 5 14.6 5 9.8 A7 7 0 0 1 19 9.8 C19 14.6 12 21 12 21 Z" />
+                <circle cx="12" cy="9.8" r="2.4" />
+              </svg>
+            )}
+            {stedLabel(sted)}
+          </div>
 
           <section className="nu">
             {modeller.map((m) => {

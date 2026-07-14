@@ -669,7 +669,7 @@ export function VindGraf({ vind, tider }: { vind: VindSerie[]; tider: string[] }
 // (statusfarver — UV er en tilstand, ikke en datakilde).
 const UV_ZONER = [
   { navn: 'lav 0–2', farve: '#0ca30c' },
-  { navn: 'moderat 3–5 · solcreme', farve: '#fab219' },
+  { navn: 'moderat 3–5', farve: '#fab219' },
   { navn: 'høj 6–7', farve: '#ec835a' },
   { navn: 'meget høj 8+', farve: '#d03b3b' },
   { navn: 'gået tid', farve: '#898781' },
@@ -706,7 +706,7 @@ export function UvGraf({
     sidste = Math.min(23, sidste + 1)
   }
 
-  const MARGEN_UV = { top: 16, hoejre: 8, bund: 24, venstre: 34 }
+  const MARGEN_UV = { top: 8, hoejre: 8, bund: 24, venstre: 34 }
   const plotBredde = bredde - MARGEN_UV.venstre - MARGEN_UV.hoejre
   const plotHoejde = UV_HOEJDE - MARGEN_UV.top - MARGEN_UV.bund
   const maxUv = Math.max(...tal)
@@ -739,8 +739,6 @@ export function UvGraf({
 
   // Gradient-stop ved zonetærsklerne (med smalle blændbånd).
   const stop = (v: number) => `${Math.min(100, (v / maxY) * 100)}%`
-  const maksTime = tal.indexOf(maxUv)
-  const fmt1 = (v: number) => v.toFixed(1).replace('.', ',')
 
   const ticks = pæneTicks(0, maxY)
 
@@ -809,25 +807,7 @@ export function UvGraf({
           <>
             <line x1={x(nuX)} x2={x(nuX)} y1={MARGEN_UV.top - 2} y2={bund} className="graf-krydssigte" />
             <circle cx={x(nuX)} cy={y(nuUv)} r={4.5} fill={uvFarve(nuUv)} className="graf-punkt" />
-            <text
-              x={Math.min(x(nuX) + 8, bredde - 70)}
-              y={MARGEN_UV.top + 2}
-              className="graf-akse"
-              fill="#c3c2b7"
-            >
-              nu · UV {fmt1(nuUv)}
-            </text>
           </>
-        )}
-        {maxUv > 0 && (
-          <text
-            x={x(Math.max(maksTime, foerste + 1.5)) - 8}
-            y={y(maxUv) - 10}
-            className="graf-akse"
-            textAnchor="end"
-          >
-            maks {fmt1(maxUv)} · kl. {String(maksTime).padStart(2, '0')}
-          </text>
         )}
         {Array.from({ length: sidste - foerste + 1 }, (_, i) => foerste + i)
           .filter((t) => t % 2 === 0)

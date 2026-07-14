@@ -98,10 +98,21 @@ header {
   color: var(--tekst);
 }
 
-h1 {
-  font-size: 1.15rem;
+.sted {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
   font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--tekst-2);
   margin-bottom: 1rem;
+}
+
+.sted svg {
+  color: var(--daempet);
+  flex-shrink: 0;
 }
 
 .status,
@@ -251,7 +262,9 @@ main.daempet {
 
 .graf-legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.25rem;
+  row-gap: 0.25rem;
   margin-bottom: 0.4rem;
 }
 
