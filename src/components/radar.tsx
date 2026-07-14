@@ -1,28 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useBredde } from './grafer.tsx'
 
-// Nedbørsradar over Danmark/Sydskandinavien (fast udsnit, uafhængig af søgt by).
-// Data: RainViewer (frit, ingen nøgle) — ca. 1 time tilbage i 10-min trin og
-// ~30 min fremskrivning. Baggrundskort: CARTO dark (OpenStreetMap-data).
-// 2×2 kortfliser, zoom 6: ca. 5,6–16,9°Ø / 52,5–58,6°N.
+// Nedbørsradar (fast centreret på Danmark, uafhængig af søgt by) med zoom og
+// panorering. Data: RainViewer (frit, ingen nøgle) — ca. 1 time tilbage i
+// 10-min trin og ~30 min fremskrivning (nowcast kan være tom).
+// Baggrundskort: CARTO dark (OpenStreetMap-data).
 
-const Z = 6
-const FLISER = [
-  { x: 33, y: 19 },
-  { x: 34, y: 19 },
-  { x: 33, y: 20 },
-  { x: 34, y: 20 },
-]
+const START_CENTER = { lat: 56.0, lon: 11.5 } // Danmarks midte
+const START_ZOOM = 7
+const MIN_ZOOM = 5
+const MAX_ZOOM = 9
+const GRAENSER = { minLat: 50, maxLat: 62, minLon: 0, maxLon: 22 }
+const FLISE = 256
 
 interface Frame {
   time: number
   path: string
 }
 
-function flisePos(i: number): React.CSSProperties {
-  return {
-    left: `${(i % 2) * 50}%`,
-    top: `${Math.floor(i / 2) * 50}%`,
-  }
+// Web-Mercator: længde/bredde ↔ "verdens-pixels" ved givet zoom.
+function verdensPx(zoom: number): number {
+  return FLISE * 2 ** zoom
+}
+
+function lonTilPx(lon: number, zoom: number): number {
+  return ((lon + 180) / 360) * verdensPx(zoom)
+}
+
+function latTilPx(lat: number, zoom: number): number {
+  const r = (lat * Math.PI) / 180
+  return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * verdensPx(zoom)
+}
+
+function pxTilLon(px: number, zoom: number): number {
+  return (px / verdensPx(zoom)) * 360 - 180
+}
+
+function pxTilLat(py: number, zoom: number): number {
+  return (Math.atan(Math.sinh(Math.PI * (1 - (2 * py) / verdensPx(zoom)))) * 180) / Math.PI
+}
+
+function klem(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v))
 }
 
 function formatTid(unix: number): string {
@@ -37,6 +56,10 @@ export function RadarKort() {
   const [valgt, setValgt] = useState(0)
   const [fejl, setFejl] = useState(false)
   const [afspiller, setAfspiller] = useState(false)
+  const [zoom, setZoom] = useState(START_ZOOM)
+  const [center, setCenter] = useState(START_CENTER)
+  const [kortRef, kortBredde] = useBredde()
+  const traek = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     let annulleret = false
@@ -69,6 +92,34 @@ export function RadarKort() {
   if (fejl) return <p className="fodnote">Radar utilgængelig lige nu.</p>
   if (frames.length === 0) return <p className="fodnote">Henter radar …</p>
 
+  // Synlige fliser ud fra centrum, zoom og kortets (kvadratiske) størrelse.
+  const stoerrelse = Math.min(kortBredde || 480, 480)
+  const topVenstreX = lonTilPx(center.lon, zoom) - stoerrelse / 2
+  const topVenstreY = latTilPx(center.lat, zoom) - stoerrelse / 2
+  const maxFlise = 2 ** zoom - 1
+  const fliser: { x: number; y: number; left: number; top: number }[] = []
+  for (
+    let tx = Math.floor(topVenstreX / FLISE);
+    tx * FLISE < topVenstreX + stoerrelse;
+    tx++
+  ) {
+    for (
+      let ty = Math.floor(topVenstreY / FLISE);
+      ty * FLISE < topVenstreY + stoerrelse;
+      ty++
+    ) {
+      if (tx < 0 || ty < 0 || tx > maxFlise || ty > maxFlise) continue
+      fliser.push({ x: tx, y: ty, left: tx * FLISE - topVenstreX, top: ty * FLISE - topVenstreY })
+    }
+  }
+
+  function flyt(dx: number, dy: number) {
+    setCenter((c) => ({
+      lat: klem(pxTilLat(latTilPx(c.lat, zoom) - dy, zoom), GRAENSER.minLat, GRAENSER.maxLat),
+      lon: klem(pxTilLon(lonTilPx(c.lon, zoom) - dx, zoom), GRAENSER.minLon, GRAENSER.maxLon),
+    }))
+  }
+
   const frame = frames[valgt]
   const relativMin = Math.round((frame.time - frames[nuIndeks].time) / 60)
   const tidLabel =
@@ -78,32 +129,73 @@ export function RadarKort() {
 
   return (
     <div>
-      <div className="radar-billede">
-        {FLISER.map((f, i) => (
+      <div
+        className="radar-billede"
+        ref={kortRef}
+        onPointerDown={(e) => {
+          traek.current = { x: e.clientX, y: e.clientY }
+          e.currentTarget.setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          if (!traek.current) return
+          flyt(e.clientX - traek.current.x, e.clientY - traek.current.y)
+          traek.current = { x: e.clientX, y: e.clientY }
+        }}
+        onPointerUp={(e) => {
+          traek.current = null
+          e.currentTarget.releasePointerCapture(e.pointerId)
+        }}
+        onPointerCancel={() => {
+          traek.current = null
+        }}
+      >
+        {fliser.map((f) => (
           <img
-            key={`kort-${i}`}
+            key={`kort-${zoom}-${f.x}-${f.y}`}
             className="radar-flise"
-            style={flisePos(i)}
-            src={`https://a.basemaps.cartocdn.com/dark_all/${Z}/${f.x}/${f.y}.png`}
+            style={{ left: f.left, top: f.top }}
+            src={`https://a.basemaps.cartocdn.com/dark_all/${zoom}/${f.x}/${f.y}.png`}
             alt=""
             draggable={false}
           />
         ))}
-        {/* Alle frames rendres stablet, så browseren preloader dem — kun den
-            valgte er synlig, og skift er øjeblikkeligt. */}
+        {/* Alle frames rendres stablet (kun synlige fliser), så browseren
+            preloader dem — kun den valgte frame er synlig. */}
         {frames.map((fr, fi) =>
-          FLISER.map((f, i) => (
+          fliser.map((f) => (
             <img
-              key={`${fr.path}-${i}`}
+              key={`${fr.path}-${zoom}-${f.x}-${f.y}`}
               className="radar-flise radar-ekko"
-              style={{ ...flisePos(i), visibility: fi === valgt ? 'visible' : 'hidden' }}
-              src={`${host}${fr.path}/256/${Z}/${f.x}/${f.y}/2/1_1.png`}
+              style={{ left: f.left, top: f.top, visibility: fi === valgt ? 'visible' : 'hidden' }}
+              src={`${host}${fr.path}/256/${zoom}/${f.x}/${f.y}/2/1_1.png`}
               alt=""
               draggable={false}
             />
           )),
         )}
         <span className="radar-tid">{tidLabel}</span>
+        <div className="radar-zoomknapper" onPointerDown={(e) => e.stopPropagation()}>
+          <button
+            className="afspil"
+            onClick={() => setZoom((z) => klem(z + 1, MIN_ZOOM, MAX_ZOOM))}
+            disabled={zoom >= MAX_ZOOM}
+            aria-label="Zoom ind"
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12">
+              <path d="M6 1.5 v9 M1.5 6 h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            className="afspil"
+            onClick={() => setZoom((z) => klem(z - 1, MIN_ZOOM, MAX_ZOOM))}
+            disabled={zoom <= MIN_ZOOM}
+            aria-label="Zoom ud"
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12">
+              <path d="M1.5 6 h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="radar-kontrol">
         <button

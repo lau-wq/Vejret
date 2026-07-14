@@ -29,7 +29,7 @@ const HOEJDE = 200
 
 const UGEDAGE_KORT = ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør']
 
-function useBredde(): [React.RefObject<HTMLDivElement | null>, number] {
+export function useBredde(): [React.RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement>(null)
   const [bredde, setBredde] = useState(600)
   useEffect(() => {

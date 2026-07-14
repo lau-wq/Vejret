@@ -7,7 +7,9 @@ Guidance for AI assistants (Claude Code) working in this repository.
 **Vejret** (Danish for "the weather") is a weather web app built with
 TypeScript + React + Vite. It **compares forecasts from two national weather
 models** — DMI Harmonie (Denmark) and MET Norway (the model behind YR) — for
-any city (default: Copenhagen), with a city search box. All UI text is in
+any city, with a city search box. On load it asks for browser geolocation and
+uses the user's position ("Din placering") as the default; it falls back to
+Copenhagen if denied. All UI text is in
 Danish. It shows current conditions per model (big temp, "feels like", icon,
 wind — no humidity by owner request), a 48-hour temperature line chart with
 per-model weather-icon rows, a 48-hour wind chart (lines + gust band per
@@ -15,13 +17,17 @@ model + direction-arrow rows under the axis), a combined 48-hour
 precipitation chart (mm bars per model on the left axis + probability lines
 on a fixed 0–100 % right axis — a deliberate dual-axis chart chosen by the
 owner, mitigated by distinct mark types and labeled axes), a precipitation
-radar card, and a 7-day comparison table.
+radar card, and a 7-day comparison table (collapsed in a `<details>` by
+default, like the hourly table).
 
-The radar card shows a fixed Denmark/South-Scandinavia extent (2×2 map tiles,
-zoom 6) regardless of the searched city: CARTO dark basemap + RainViewer
-composite tiles (both keyless), with a slider spanning ~60 min back (10-min
-steps) and RainViewer's ~30 min nowcast forward (`nowcast` can be empty —
-labels are computed dynamically).
+The radar card starts centered on Denmark (fixed center, regardless of the
+searched city) at zoom 7, with +/− zoom buttons (zoom 5–9) and drag-to-pan
+(clamped to roughly the Nordics). Tiles are computed dynamically from
+center/zoom via Web-Mercator math in `components/radar.tsx`: CARTO dark
+basemap + RainViewer composite tiles (both keyless), with a slider spanning
+~60 min back (10-min steps) and RainViewer's ~30 min nowcast forward
+(`nowcast` can be empty — labels are computed dynamically). The slider uses a
+neutral gray accent (owner request: no blue).
 
 Weather and geocoding data come from the free **Open-Meteo** API
 (https://open-meteo.com) using its per-model endpoints

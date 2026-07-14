@@ -80,6 +80,27 @@ export default function App() {
   const [soegetekst, setSoegetekst] = useState('')
   const [forslag, setForslag] = useState<Sted[]>([])
   const soegRef = useRef<number | undefined>(undefined)
+  const harValgtManuelt = useRef(false)
+
+  // Brug brugerens egen position som startby, hvis browseren giver lov.
+  // Appen starter på København med det samme og skifter, når svaret kommer —
+  // medmindre brugeren i mellemtiden selv har valgt en by.
+  useEffect(() => {
+    if (!('geolocation' in navigator)) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (harValgtManuelt.current) return
+        setSted({
+          id: -1,
+          name: 'Din placering',
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        })
+      },
+      () => {}, // afvist/fejl → bliv på København
+      { timeout: 8000, maximumAge: 600000 },
+    )
+  }, [])
 
   useEffect(() => {
     let annulleret = false
@@ -125,6 +146,7 @@ export default function App() {
   }
 
   function vaelgSted(nyt: Sted) {
+    harValgtManuelt.current = true
     setSted(nyt)
     setSoegetekst('')
     setForslag([])
@@ -298,8 +320,8 @@ export default function App() {
             </p>
           </section>
 
-          <section className="kort">
-            <h2>7 døgn · maks / min °C · nedbør mm</h2>
+          <details className="tabelvisning">
+            <summary>7 døgn · maks / min °C · nedbør mm</summary>
             <table className="uge">
               <thead>
                 <tr>
@@ -335,7 +357,7 @@ export default function App() {
                 ))}
               </tbody>
             </table>
-          </section>
+          </details>
 
           <details className="tabelvisning">
             <summary>Vis timedata som tabel</summary>

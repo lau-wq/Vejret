@@ -401,11 +401,40 @@ main.daempet {
   background: #10151a;
 }
 
+.radar-billede {
+  cursor: grab;
+  touch-action: none;
+}
+
+.radar-billede:active {
+  cursor: grabbing;
+}
+
 .radar-flise {
   position: absolute;
-  width: 50%;
-  height: 50%;
+  width: 256px;
+  height: 256px;
+  max-width: none;
   user-select: none;
+  pointer-events: none;
+}
+
+.radar-zoomknapper {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radar-zoomknapper .afspil {
+  background: rgba(13, 13, 13, 0.7);
+}
+
+.radar-zoomknapper .afspil:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .radar-ekko {
@@ -456,7 +485,7 @@ main.daempet {
 
 .slider-wrap input[type='range'] {
   width: 100%;
-  accent-color: #3987e5;
+  accent-color: var(--daempet);
   height: 3px;
 }
 
